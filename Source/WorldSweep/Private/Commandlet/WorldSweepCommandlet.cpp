@@ -8,6 +8,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "WorldPartition/WorldPartition.h"
+#include "FileHelpers.h"
 #include "Editor.h"
 
 // ---------------------------------------------------------------------------
@@ -24,11 +25,23 @@ int32 UWorldSweepCommandlet::Main(const FString& InParams)
 {
     // ----- Resolve world -----
 
+    FString MapPath;
+    if (FParse::Value(*InParams, TEXT("Map="), MapPath))
+    {
+        UE_LOG(LogWorldSweep, Log, TEXT("WorldSweepCommandlet: Loading map '%s'..."), *MapPath);
+        FEditorFileUtils::LoadMap(MapPath, false, true);
+    }
+
     UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : GWorld;
     if (!World)
     {
-        UE_LOG(LogWorldSweep, Error, TEXT("WorldSweepCommandlet: No world is loaded. Pass the map path before -run=WorldSweep."));
+        UE_LOG(LogWorldSweep, Error, TEXT("WorldSweepCommandlet: No world loaded. Use -Map=<PackagePath> to specify a map."));
         return 1;
+    }
+
+    if (World->GetName() == TEXT("Untitled"))
+    {
+        UE_LOG(LogWorldSweep, Warning, TEXT("WorldSweepCommandlet: World is 'Untitled' — no map was loaded. Use -Map=<PackagePath>."));
     }
 
     UE_LOG(LogWorldSweep, Log, TEXT("WorldSweepCommandlet: World '%s' loaded."), *World->GetName());
