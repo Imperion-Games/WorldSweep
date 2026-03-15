@@ -624,6 +624,13 @@ bool UWorldSweepRunner::PassesTagFilter(const AActor* InActor, const TArray<FNam
 
 bool UWorldSweepRunner::PassesDataLayerFilter(const AActor* InActor, const UDataLayerManager* InDataLayerManager) const
 {
+    // In commandlet mode there is no editor session, so no data layers are marked as
+    // loaded in the editor. Skipping this filter ensures all actors are visible to scripts.
+    if (IsRunningCommandlet())
+    {
+        return true;
+    }
+
     if (!InDataLayerManager)
     {
         return true;
