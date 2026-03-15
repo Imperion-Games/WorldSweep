@@ -207,6 +207,8 @@ FWorldSweepResult UWorldSweepRunner::ExecuteWorldPartition(const FBox& InSweepAr
             {
                 CellLoader = MakeUnique<FLoaderAdapterShape>(InWorld, CellBounds, TEXT("WorldSweep"));
                 CellLoader->Load();
+                FlushAsyncLoading();
+                InWorld->UpdateLevelStreaming();
             }
 
             for (UWorldSweepScript* Script : PassScripts)
