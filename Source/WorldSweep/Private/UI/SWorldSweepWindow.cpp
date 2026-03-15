@@ -462,7 +462,9 @@ FReply SWorldSweepWindow::OnRunClicked()
     }
 
     UWorldSweepRunner* Runner = NewObject<UWorldSweepRunner>();
+    Runner->AddToRoot();
     const FWorldSweepResult Result = Runner->Execute(SelectedBatch, SweepArea, World);
+    Runner->RemoveFromRoot();
 
     if (Result.bWasCancelled)
     {

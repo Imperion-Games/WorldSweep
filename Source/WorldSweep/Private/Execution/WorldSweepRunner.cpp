@@ -60,9 +60,9 @@ FWorldSweepResult UWorldSweepRunner::Execute(UWorldSweepBatch* InBatch, const FB
     }
 
     ScriptsByPriority.Reset();
-    for (UWorldSweepScript* Script : ActiveScripts)
+    for (const TObjectPtr<UWorldSweepScript>& Script : ActiveScripts)
     {
-        ScriptsByPriority.FindOrAdd(Script->Priority).Add(Script);
+        ScriptsByPriority.FindOrAdd(Script->Priority).Add(Script.Get());
     }
 
     PriorityLevels.Reset();
@@ -84,7 +84,7 @@ FWorldSweepResult UWorldSweepRunner::Execute(UWorldSweepBatch* InBatch, const FB
         ActiveScripts.Num(),
         PriorityLevels.Num());
 
-    for (UWorldSweepScript* Script : ActiveScripts)
+    for (const TObjectPtr<UWorldSweepScript>& Script : ActiveScripts)
     {
         Script->OnBatchStarted();
     }
@@ -107,7 +107,7 @@ FWorldSweepResult UWorldSweepRunner::Execute(UWorldSweepBatch* InBatch, const FB
             break;
     }
 
-    for (UWorldSweepScript* Script : ActiveScripts)
+    for (const TObjectPtr<UWorldSweepScript>& Script : ActiveScripts)
     {
         Script->OnBatchCompleted(Result.CellsProcessed);
     }

@@ -66,7 +66,9 @@ private:
     TArray<FBox> CellGrid;
 
     // Transient execution context — valid only during Execute().
-    TArray<UWorldSweepScript*> ActiveScripts;
+    // UPROPERTY keeps scripts reachable during DoCollectGarbage() calls between cells.
+    UPROPERTY()
+    TArray<TObjectPtr<UWorldSweepScript>> ActiveScripts;
     TMap<int32, TArray<UWorldSweepScript*>> ScriptsByPriority;
     TArray<int32> PriorityLevels;
     TObjectPtr<UClass> ActorClass;
