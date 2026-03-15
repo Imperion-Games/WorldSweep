@@ -165,7 +165,10 @@ FWorldSweepResult UWorldSweepRunner::ExecuteWorldPartition(const FBox& InSweepAr
         static_cast<float>(CellGrid.Num() * PriorityLevels.Num()),
         FText::FromString(TEXT("WorldSweep: Running batch (World Partition)..."))
     );
-    SlowTask.MakeDialog(true);
+    if (!IsRunningCommandlet())
+    {
+        SlowTask.MakeDialog(true);
+    }
 
     for (int32 PassIndex = 0; PassIndex < PriorityLevels.Num(); ++PassIndex)
     {
@@ -295,7 +298,10 @@ FWorldSweepResult UWorldSweepRunner::ExecuteStreamingLevels(const FBox& InSweepA
         static_cast<float>(StreamingLevels.Num() * PriorityLevels.Num()),
         FText::FromString(TEXT("WorldSweep: Running batch (Streaming Levels)..."))
     );
-    SlowTask.MakeDialog(true);
+    if (!IsRunningCommandlet())
+    {
+        SlowTask.MakeDialog(true);
+    }
 
     for (int32 PassIndex = 0; PassIndex < PriorityLevels.Num(); ++PassIndex)
     {
@@ -495,7 +501,10 @@ FWorldSweepResult UWorldSweepRunner::ExecuteFlatLevel(const FBox& InSweepArea, U
         static_cast<float>(PriorityLevels.Num()),
         FText::FromString(TEXT("WorldSweep: Running batch (Flat Level)..."))
     );
-    SlowTask.MakeDialog(true);
+    if (!IsRunningCommandlet())
+    {
+        SlowTask.MakeDialog(true);
+    }
 
     for (int32 PassIndex = 0; PassIndex < PriorityLevels.Num(); ++PassIndex)
     {
