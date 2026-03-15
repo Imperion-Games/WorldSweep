@@ -351,7 +351,16 @@ FReply SWorldSweepWindow::OnUseEntireWorldClicked()
 
     if (UWorldPartition* WP = World->GetWorldPartition())
     {
+        // Start with WP runtime bounds then expand to include any persistent-level
+        // actors that live outside the WP grid (e.g. placed in the persistent level).
         SweepArea = WP->GetRuntimeWorldBounds();
+        for (TActorIterator<AActor> It(World); It; ++It)
+        {
+            if (*It && !(*It)->IsA<AWorldSettings>())
+            {
+                SweepArea += (*It)->GetActorLocation();
+            }
+        }
     }
     else
     {

@@ -108,7 +108,17 @@ int32 UWorldSweepCommandlet::Main(const FString& InParams)
         if (UWorldPartition* WP = World->GetWorldPartition())
         {
             SweepArea = WP->GetRuntimeWorldBounds();
-            UE_LOG(LogWorldSweep, Log, TEXT("WorldSweepCommandlet: No sweep area specified — using World Partition runtime bounds."));
+
+            // Expand to include persistent-level actors outside the WP grid.
+            for (TActorIterator<AActor> It(World); It; ++It)
+            {
+                if (*It && !(*It)->IsA<AWorldSettings>())
+                {
+                    SweepArea += (*It)->GetActorLocation();
+                }
+            }
+
+            UE_LOG(LogWorldSweep, Log, TEXT("WorldSweepCommandlet: No sweep area specified — derived from World Partition bounds + loaded actors."));
         }
         else
         {
