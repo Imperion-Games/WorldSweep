@@ -6,6 +6,8 @@
 #include "WorldSweepLog.h"
 
 #include "Engine/World.h"
+#include "EngineUtils.h"
+#include "WorldPartition/WorldPartition.h"
 #include "Editor.h"
 
 // ---------------------------------------------------------------------------
@@ -89,7 +91,35 @@ int32 UWorldSweepCommandlet::Main(const FString& InParams)
     }
     else
     {
-        UE_LOG(LogWorldSweep, Log, TEXT("WorldSweepCommandlet: No sweep area provided — mode-dependent defaults will apply."));
+        // No sweep area specified — derive full world bounds automatically.
+        if (UWorldPartition* WP = World->GetWorldPartition())
+        {
+            SweepArea = WP->GetRuntimeWorldBounds();
+            UE_LOG(LogWorldSweep, Log, TEXT("WorldSweepCommandlet: No sweep area specified — using World Partition runtime bounds."));
+        }
+        else
+        {
+            int32 ActorCount = 0;
+            for (TActorIterator<AActor> It(World); It; ++It)
+            {
+                if (*It && !(*It)->IsA<AWorldSettings>())
+                {
+                    SweepArea += (*It)->GetActorLocation();
+                    ++ActorCount;
+                }
+            }
+
+            if (SweepArea.IsValid)
+            {
+                SweepArea = SweepArea.ExpandBy(500.0f);
+                UE_LOG(LogWorldSweep, Log, TEXT("WorldSweepCommandlet: No sweep area specified — derived bounds from %d actors."),
+                    ActorCount);
+            }
+            else
+            {
+                UE_LOG(LogWorldSweep, Warning, TEXT("WorldSweepCommandlet: No sweep area specified and world contains no actors to derive bounds from. Streaming Levels mode will process all sub-levels; other modes may produce no results."));
+            }
+        }
     }
 
     // ----- Execute -----
