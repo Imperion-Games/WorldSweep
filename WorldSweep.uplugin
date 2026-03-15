@@ -1,0 +1,24 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "WorldSweep",
+	"Description": "Batch scripting system for executing actions across large World Partition maps, cell by cell.",
+	"Category": "Editor",
+	"CreatedBy": "ToaGames",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "WorldSweep",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	]
+}
