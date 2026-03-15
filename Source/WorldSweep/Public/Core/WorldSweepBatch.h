@@ -7,6 +7,16 @@
 #include "Core/WorldSweepScript.h"
 #include "WorldSweepBatch.generated.h"
 
+/** Controls how WorldSweep selects its iteration strategy for a given world. */
+UENUM(BlueprintType)
+enum class EWorldSweepMode : uint8
+{
+    Auto            UMETA(DisplayName = "Auto (Detect from World)"),
+    WorldPartition  UMETA(DisplayName = "World Partition"),
+    StreamingLevels UMETA(DisplayName = "Streaming Levels"),
+    FlatLevel       UMETA(DisplayName = "Flat Level")
+};
+
 /** Data asset defining a collection of WorldSweep scripts and execution parameters. Create one per logical batch operation via the Content Browser. */
 UCLASS(BlueprintType)
 class WORLDSWEEP_API UWorldSweepBatch : public UDataAsset
@@ -30,4 +40,8 @@ public:
     /** Optional actor class filter applied globally. When set, only actors of this class or any subclass are passed to OnActorFound. Leave empty to process all actors. */
     UPROPERTY(EditAnywhere, Category = "WorldSweep|Batch")
     TSubclassOf<AActor> ActorClassFilter;
+
+    /** Iteration strategy. Auto detects the correct mode at runtime from the world type. Override only when Auto produces unexpected results. */
+    UPROPERTY(EditAnywhere, Category = "WorldSweep|Batch")
+    EWorldSweepMode SweepMode;
 };

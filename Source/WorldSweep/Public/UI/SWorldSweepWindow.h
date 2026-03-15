@@ -5,11 +5,11 @@
 #include "CoreMinimal.h"
 #include "Widgets/SCompoundWidget.h"
 #include "AssetRegistry/AssetData.h"
+#include "Core/WorldSweepBatch.h"
 
-class UWorldSweepBatch;
 class SWorldSweepMapView;
 
-/** Main Slate panel for the WorldSweep editor tool. Provides batch configuration, sweep area coordinate inputs, and run controls. Open alongside the World Partition Editor and Data Layers tabs via Tools > WorldSweep. */
+/** Main Slate panel for the WorldSweep editor tool. Provides batch configuration, sweep area coordinate inputs, and run controls. Adapts its layout based on the current world type (World Partition, Streaming Levels, or Flat Level). */
 class WORLDSWEEP_API SWorldSweepWindow : public SCompoundWidget
 {
 public:
@@ -18,13 +18,19 @@ public:
     SLATE_END_ARGS()
 
     void Construct(const FArguments& InArgs);
+    virtual ~SWorldSweepWindow();
 
 private:
+
+    void RefreshWorldMode();
+    void OnWorldMapChanged(uint32 InChangeType);
 
     FString GetBatchAssetPath() const;
     void OnBatchAssetChanged(const FAssetData& InAssetData);
 
     FReply OnUseEntireWorldClicked();
+    EVisibility GetUseEntireWorldVisibility() const;
+    EVisibility GetSweepAreaVisibility() const;
 
     TOptional<float> GetMinX() const;
     TOptional<float> GetMinY() const;
@@ -41,6 +47,8 @@ private:
 
     void OnMapSweepAreaChanged(const FBox& InBox);
 
+    int32 GetLeftPanelIndex() const;
+
     FReply OnRunClicked();
     bool CanRun() const;
 
@@ -48,4 +56,6 @@ private:
 
     TObjectPtr<UWorldSweepBatch> SelectedBatch;
     FBox SweepArea;
+    EWorldSweepMode DetectedMode;
+    FDelegateHandle WindowMapChangeHandle;
 };
