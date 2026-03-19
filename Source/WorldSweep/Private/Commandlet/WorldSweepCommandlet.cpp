@@ -11,8 +11,6 @@
 #include "FileHelpers.h"
 #include "Editor.h"
 
-// ---------------------------------------------------------------------------
-
 UWorldSweepCommandlet::UWorldSweepCommandlet()
 {
     IsClient = false;
@@ -28,7 +26,7 @@ int32 UWorldSweepCommandlet::Main(const FString& InParams)
     FString MapPath;
     if (FParse::Value(*InParams, TEXT("Map="), MapPath))
     {
-        UE_LOG(LogWorldSweep, Log, TEXT("WorldSweepCommandlet: Loading map '%s'..."), *MapPath);
+        UE_LOG(LogWorldSweep, Verbose, TEXT("WorldSweepCommandlet: Loading map '%s'..."), *MapPath);
         FEditorFileUtils::LoadMap(MapPath, false, true);
     }
 
@@ -44,7 +42,7 @@ int32 UWorldSweepCommandlet::Main(const FString& InParams)
         UE_LOG(LogWorldSweep, Warning, TEXT("WorldSweepCommandlet: World is 'Untitled' — no map was loaded. Use -Map=<PackagePath>."));
     }
 
-    UE_LOG(LogWorldSweep, Log, TEXT("WorldSweepCommandlet: World '%s' loaded."), *World->GetName());
+    UE_LOG(LogWorldSweep, Verbose, TEXT("WorldSweepCommandlet: World '%s' loaded."), *World->GetName());
 
     // ----- Resolve batch asset -----
 
@@ -62,7 +60,7 @@ int32 UWorldSweepCommandlet::Main(const FString& InParams)
         return 1;
     }
 
-    UE_LOG(LogWorldSweep, Log, TEXT("WorldSweepCommandlet: Batch '%s' loaded (%d script(s))."),
+    UE_LOG(LogWorldSweep, Verbose, TEXT("WorldSweepCommandlet: Batch '%s' loaded (%d script(s))."),
         *Batch->GetName(), Batch->Scripts.Num());
 
     // ----- Resolve sweep area -----
@@ -99,7 +97,7 @@ int32 UWorldSweepCommandlet::Main(const FString& InParams)
         static constexpr float HalfWorldMax = 1048576.0f;
         SweepArea = FBox(FVector(MinX, MinY, -HalfWorldMax), FVector(MaxX, MaxY, HalfWorldMax));
 
-        UE_LOG(LogWorldSweep, Log, TEXT("WorldSweepCommandlet: Sweep area set to (%.0f, %.0f) — (%.0f, %.0f)."),
+        UE_LOG(LogWorldSweep, Verbose, TEXT("WorldSweepCommandlet: Sweep area set to (%.0f, %.0f) — (%.0f, %.0f)."),
             MinX, MinY, MaxX, MaxY);
     }
     else
@@ -107,7 +105,7 @@ int32 UWorldSweepCommandlet::Main(const FString& InParams)
         // No sweep area specified — derive full world bounds automatically.
         if (UWorldPartition* WP = World->GetWorldPartition())
         {
-            SweepArea = WP->GetRuntimeWorldBounds();
+            SweepArea = WP->GetEditorWorldBounds();
 
             // Expand to include persistent-level actors outside the WP grid.
             for (TActorIterator<AActor> It(World); It; ++It)
@@ -118,7 +116,13 @@ int32 UWorldSweepCommandlet::Main(const FString& InParams)
                 }
             }
 
-            UE_LOG(LogWorldSweep, Log, TEXT("WorldSweepCommandlet: No sweep area specified — derived from World Partition bounds + loaded actors."));
+            // Pin Z to the full legal world height so sky/atmosphere actors at
+            // extreme altitudes are never missed by the cell bounds check.
+            static constexpr float HalfWorldMax = 1048576.0f;
+            SweepArea.Min.Z = -HalfWorldMax;
+            SweepArea.Max.Z =  HalfWorldMax;
+
+            UE_LOG(LogWorldSweep, Verbose, TEXT("WorldSweepCommandlet: No sweep area specified — derived from World Partition bounds + loaded actors."));
         }
         else
         {
@@ -135,7 +139,7 @@ int32 UWorldSweepCommandlet::Main(const FString& InParams)
             if (SweepArea.IsValid)
             {
                 SweepArea = SweepArea.ExpandBy(500.0f);
-                UE_LOG(LogWorldSweep, Log, TEXT("WorldSweepCommandlet: No sweep area specified — derived bounds from %d actors."),
+                UE_LOG(LogWorldSweep, Verbose, TEXT("WorldSweepCommandlet: No sweep area specified — derived bounds from %d actors."),
                     ActorCount);
             }
             else

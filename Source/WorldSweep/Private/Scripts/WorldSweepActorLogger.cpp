@@ -8,8 +8,7 @@ UWorldSweepActorLogger::UWorldSweepActorLogger()
     : bLogActorLocation(false)
     , TotalActorsLogged(0)
 {
-    bHandleCellEvents = true;
-    bProcessActors = true;
+    EventFlags = static_cast<int32>(EWorldSweepEventFlags::CellEvents) | static_cast<int32>(EWorldSweepEventFlags::Actors);
 }
 
 void UWorldSweepActorLogger::OnBatchStarted_Implementation()
@@ -49,7 +48,7 @@ void UWorldSweepActorLogger::OnActorFound_Implementation(AActor* InActor, const 
     ++TotalActorsLogged;
 }
 
-void UWorldSweepActorLogger::OnBatchCompleted_Implementation(int32 InTotalCellsProcessed)
+void UWorldSweepActorLogger::OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool bWasCancelled)
 {
     UE_LOG(LogWorldSweep, Log, TEXT("[ActorLogger] Batch complete. Total actors logged: %d across %d cells."),
         TotalActorsLogged,

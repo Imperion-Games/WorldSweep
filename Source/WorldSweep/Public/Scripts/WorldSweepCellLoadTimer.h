@@ -17,7 +17,7 @@ public:
     virtual void OnBatchStarted_Implementation() override;
     virtual void OnPreCellLoad_Implementation(const FBox& InCellBounds) override;
     virtual void OnCellStarted_Implementation(const FBox& InCellBounds) override;
-    virtual void OnBatchCompleted_Implementation(int32 InTotalCellsProcessed) override;
+    virtual void OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool bWasCancelled) override;
     //~ End UWorldSweepScript Interface
 
 public:

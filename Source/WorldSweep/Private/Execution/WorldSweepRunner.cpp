@@ -5,8 +5,8 @@
 #include "Core/WorldSweepScript.h"
 #include "WorldSweepLog.h"
 #include "WorldPartition/WorldPartition.h"
-#include "WorldPartition/WorldPartitionActorLoaderInterface.h"
-#include "WorldPartition/LoaderAdapter/LoaderAdapterShape.h"
+#include "WorldPartition/WorldPartitionHandle.h"
+#include "WorldPartition/ActorDescContainerInstance.h"
 #include "WorldPartition/DataLayer/DataLayerManager.h"
 #include "WorldPartition/DataLayer/DataLayerInstance.h"
 #include "WorldPartition/WorldPartitionHelpers.h"
@@ -15,8 +15,12 @@
 #include "Engine/World.h"
 #include "Misc/ScopedSlowTask.h"
 #include "EngineUtils.h"
-
-// ---------------------------------------------------------------------------
+#include "FileHelpers.h"
+#include "SourceControlHelpers.h"
+#include "ISourceControlModule.h"
+#include "Misc/PackageName.h"
+#include "HAL/FileManager.h"
+#include "UObject/Package.h"
 
 FWorldSweepResult::FWorldSweepResult()
     : CellsProcessed(0)
@@ -25,11 +29,10 @@ FWorldSweepResult::FWorldSweepResult()
 {
 }
 
-// ---------------------------------------------------------------------------
-
 UWorldSweepRunner::UWorldSweepRunner()
     : ActorClass(nullptr)
     , DataLayerManager(nullptr)
+    , bSaveModifications(false)
 {
 }
 
@@ -84,6 +87,25 @@ FWorldSweepResult UWorldSweepRunner::Execute(UWorldSweepBatch* InBatch, const FB
         ActiveScripts.Num(),
         PriorityLevels.Num());
 
+    // Expose the world to all scripts before OnBatchStarted fires.
+    for (const TObjectPtr<UWorldSweepScript>& Script : ActiveScripts)
+    {
+        Script->World = InWorld;
+    }
+
+    bSaveModifications = InBatch->bSaveModifications;
+    SetupSaveTracking();
+
+    // Warn for any script that opted into no events — it will silently do nothing.
+    for (const TObjectPtr<UWorldSweepScript>& Script : ActiveScripts)
+    {
+        if (Script->EventFlags == 0)
+        {
+            UE_LOG(LogWorldSweep, Warning, TEXT("WorldSweep: Script '%s' has EventFlags = 0 and will not receive any events."),
+                *Script->GetClass()->GetName());
+        }
+    }
+
     for (const TObjectPtr<UWorldSweepScript>& Script : ActiveScripts)
     {
         Script->OnBatchStarted();
@@ -109,7 +131,19 @@ FWorldSweepResult UWorldSweepRunner::Execute(UWorldSweepBatch* InBatch, const FB
 
     for (const TObjectPtr<UWorldSweepScript>& Script : ActiveScripts)
     {
-        Script->OnBatchCompleted(Result.CellsProcessed);
+        Script->OnBatchCompleted(Result.CellsProcessed, Result.bWasCancelled);
+    }
+
+    // Final save pass — catches anything left for Flat Level mode and any
+    // last-cell packages from WP / Streaming that might have been missed.
+    SaveAndCheckOutDirtyPackages();
+
+    TeardownSaveTracking();
+
+    // Clear the world reference from all scripts.
+    for (const TObjectPtr<UWorldSweepScript>& Script : ActiveScripts)
+    {
+        Script->World = nullptr;
     }
 
     UE_LOG(LogWorldSweep, Log, TEXT("WorldSweep: Batch '%s' finished. Cells: %d | Actors: %d | Cancelled: %s"),
@@ -120,8 +154,6 @@ FWorldSweepResult UWorldSweepRunner::Execute(UWorldSweepBatch* InBatch, const FB
 
     return Result;
 }
-
-// ---------------------------------------------------------------------------
 
 EWorldSweepMode UWorldSweepRunner::ResolveMode(const UWorldSweepBatch* InBatch, const UWorld* InWorld) const
 {
@@ -143,8 +175,6 @@ EWorldSweepMode UWorldSweepRunner::ResolveMode(const UWorldSweepBatch* InBatch, 
     return EWorldSweepMode::FlatLevel;
 }
 
-// ---------------------------------------------------------------------------
-
 FWorldSweepResult UWorldSweepRunner::ExecuteWorldPartition(const FBox& InSweepArea, UWorld* InWorld, UWorldPartition* InWP)
 {
     FWorldSweepResult Result;
@@ -161,10 +191,24 @@ FWorldSweepResult UWorldSweepRunner::ExecuteWorldPartition(const FBox& InSweepAr
         return Result;
     }
 
+    if (!InWP)
+    {
+        UE_LOG(LogWorldSweep, Error, TEXT("WorldSweep [WP]: World Partition is null. Aborting."));
+        return Result;
+    }
+
+    UActorDescContainerInstance* Container = InWP->GetActorDescContainerInstance();
+    if (!Container)
+    {
+        UE_LOG(LogWorldSweep, Error, TEXT("WorldSweep [WP]: Failed to get actor descriptor container. Aborting."));
+        return Result;
+    }
+
     FScopedSlowTask SlowTask(
         static_cast<float>(CellGrid.Num() * PriorityLevels.Num()),
         FText::FromString(TEXT("WorldSweep: Running batch (World Partition)..."))
     );
+
     if (!IsRunningCommandlet())
     {
         SlowTask.MakeDialog(true);
@@ -175,8 +219,36 @@ FWorldSweepResult UWorldSweepRunner::ExecuteWorldPartition(const FBox& InSweepAr
         const int32 CurrentPriority = PriorityLevels[PassIndex];
         const TArray<UWorldSweepScript*>& PassScripts = ScriptsByPriority[CurrentPriority];
 
-        UE_LOG(LogWorldSweep, Log, TEXT("WorldSweep [WP]: Priority pass %d (level %d) | %d script(s)"),
-            PassIndex + 1, CurrentPriority, PassScripts.Num());
+        // OR all script flags together to determine what this pass needs at an aggregate level.
+        int32 PassFlags = 0;
+        for (const UWorldSweepScript* Script : PassScripts)
+        {
+            PassFlags |= Script->EventFlags;
+        }
+
+        const int32 CellFlag      = static_cast<int32>(EWorldSweepEventFlags::CellEvents);
+        const int32 ActorFlag     = static_cast<int32>(EWorldSweepEventFlags::Actors);
+        const int32 ComponentFlag = static_cast<int32>(EWorldSweepEventFlags::Components);
+
+        const bool bPassNeedsCellEvents = (PassFlags & CellFlag)                      != 0;
+        const bool bPassNeedsActors     = (PassFlags & (ActorFlag | ComponentFlag))   != 0;
+
+        UE_LOG(LogWorldSweep, Verbose, TEXT("WorldSweep [WP]: Priority pass %d (level %d) | %d script(s) | Cell: %s | Actors: %s | Components: %s"),
+            PassIndex + 1, CurrentPriority, PassScripts.Num(),
+            (PassFlags & CellFlag)      ? TEXT("Yes") : TEXT("No"),
+            (PassFlags & ActorFlag)     ? TEXT("Yes") : TEXT("No"),
+            (PassFlags & ComponentFlag) ? TEXT("Yes") : TEXT("No"));
+
+        if (!bPassNeedsCellEvents && !bPassNeedsActors)
+        {
+            // Batch-only scripts — no cell work required.
+            continue;
+        }
+
+        // WP streaming actors: deduplicated by GUID (stable across GC cycles).
+        // Persistent-level actors: deduplicated by pointer (never GC'd, always stable).
+        TSet<FGuid>   ProcessedWPActors;
+        TSet<AActor*> ProcessedPersistent;
 
         for (int32 CellIndex = 0; CellIndex < CellGrid.Num(); ++CellIndex)
         {
@@ -196,80 +268,148 @@ FWorldSweepResult UWorldSweepRunner::ExecuteWorldPartition(const FBox& InSweepAr
 
             for (UWorldSweepScript* Script : PassScripts)
             {
-                if (Script->bHandleCellEvents)
-                {
-                    Script->OnPreCellLoad(CellBounds);
-                }
-            }
-
-            TUniquePtr<FLoaderAdapterShape> CellLoader;
-            if (InWP)
-            {
-                CellLoader = MakeUnique<FLoaderAdapterShape>(InWorld, CellBounds, TEXT("WorldSweep"));
-                CellLoader->Load();
-                FlushAsyncLoading();
-                InWorld->UpdateLevelStreaming();
-            }
-
-            for (UWorldSweepScript* Script : PassScripts)
-            {
-                if (Script->bHandleCellEvents)
-                {
-                    Script->OnCellStarted(CellBounds);
-                }
+                if (Script->EventFlags & CellFlag) Script->OnPreCellLoad(CellBounds);
             }
 
             int32 ActorsInCell = 0;
-            for (TActorIterator<AActor> It(InWorld, ActorClass); It; ++It)
+
+            if (bPassNeedsActors)
             {
-                AActor* Actor = *It;
-                if (!Actor || !CellBounds.IsInsideOrOn(Actor->GetActorLocation()))
+                // Scoped block: FWorldPartitionReference objects load their actor
+                // synchronously on construction and release it on destruction.
+                // Keeping them in a local array holds the actors in memory for the
+                // duration of the cell, then unloads them when the block exits.
                 {
-                    continue;
-                }
+                    // Query actor descriptors intersecting this cell WITHOUT loading actors.
+                    // ForEachIntersectingActorDescInstance handles spatial and class filtering
+                    // at the descriptor level. FWorldPartitionReference then loads each actor
+                    // synchronously on construction via the default FImmediate loading context.
+                    TArray<FWorldPartitionReference> CellRefs;
+                    FWorldPartitionHelpers::ForEachIntersectingActorDescInstance(InWP, CellBounds, ActorClass,
+                        [&](const FWorldPartitionActorDescInstance* DescInstance) -> bool
+                        {
+                            const FGuid Guid = DescInstance->GetGuid();
+                            if (Guid.IsValid() && !ProcessedWPActors.Contains(Guid))
+                            {
+                                // Mark as processed at the descriptor stage so subsequent cells
+                                // never re-queue this actor, regardless of whether loading succeeds
+                                // or whether GetActorGuid() returns a matching value at runtime.
+                                ProcessedWPActors.Add(Guid);
+                                CellRefs.Emplace(Container, Guid);
+                            }
+                            return true;
+                        });
 
-                if (!PassesDataLayerFilter(Actor, DataLayerManager))
-                {
-                    continue;
-                }
+                    for (UWorldSweepScript* Script : PassScripts)
+                    {
+                        if (Script->EventFlags & CellFlag) Script->OnCellStarted(CellBounds);
+                    }
 
+                    // Process WP streaming actors loaded via references.
+                    for (const FWorldPartitionReference& Ref : CellRefs)
+                    {
+                        AActor* Actor = Ref.GetActor();
+                        if (!Actor || !PassesDataLayerFilter(Actor, DataLayerManager))
+                        {
+                            continue;
+                        }
+
+                        for (UWorldSweepScript* Script : PassScripts)
+                        {
+                            if (!(Script->EventFlags & ActorFlag)) continue;
+                            if (!Script->ActorTagFilter.IsEmpty() && !PassesTagFilter(Actor, Script->ActorTagFilter)) continue;
+                            Script->OnActorFound(Actor, CellBounds);
+                        }
+
+                        if (PassFlags & ComponentFlag)
+                        {
+                            DispatchComponentEvents(Actor, CellBounds, PassScripts);
+                        }
+
+                        ++ActorsInCell;
+                        ++Result.ActorsProcessed;
+                    }
+
+                    // Process persistent-level actors (always loaded, not WP-managed).
+                    // Filter by location to assign each one to exactly one sweep cell.
+                    for (TActorIterator<AActor> It(InWorld, ActorClass); It; ++It)
+                    {
+                        AActor* Actor = *It;
+                        if (!Actor || Actor->GetLevel() != InWorld->PersistentLevel)
+                        {
+                            continue;
+                        }
+                        if (!CellBounds.IsInsideOrOn(Actor->GetActorLocation()))
+                        {
+                            continue;
+                        }
+                        // Skip actors already dispatched via the WP descriptor path
+                        // (some WP-registered actors, e.g. Landscape, live in the persistent level).
+                        const FGuid ActorGuid = Actor->GetActorGuid();
+                        if (ActorGuid.IsValid() && ProcessedWPActors.Contains(ActorGuid))
+                        {
+                            continue;
+                        }
+                        if (ProcessedPersistent.Contains(Actor))
+                        {
+                            continue;
+                        }
+                        if (!PassesDataLayerFilter(Actor, DataLayerManager))
+                        {
+                            continue;
+                        }
+
+                        ProcessedPersistent.Add(Actor);
+                        // If this actor has a WP GUID, record it so that GC-induced pointer
+                        // changes in later cells don't bypass the pointer-based dedup.
+                        if (ActorGuid.IsValid())
+                        {
+                            ProcessedWPActors.Add(ActorGuid);
+                        }
+
+                        for (UWorldSweepScript* Script : PassScripts)
+                        {
+                            if (!(Script->EventFlags & ActorFlag)) continue;
+                            if (!Script->ActorTagFilter.IsEmpty() && !PassesTagFilter(Actor, Script->ActorTagFilter)) continue;
+                            Script->OnActorFound(Actor, CellBounds);
+                        }
+
+                        if (PassFlags & ComponentFlag)
+                        {
+                            DispatchComponentEvents(Actor, CellBounds, PassScripts);
+                        }
+
+                        ++ActorsInCell;
+                        ++Result.ActorsProcessed;
+                    }
+
+                    for (UWorldSweepScript* Script : PassScripts)
+                    {
+                        if (Script->EventFlags & CellFlag) Script->OnCellCompleted(CellBounds);
+                    }
+
+                    // Save per-cell while WP actors are still in memory (before CellRefs scope exits and GC runs).
+                    SaveAndCheckOutDirtyPackages();
+
+                } // CellRefs destructs here — WP actors are released and queued for unload.
+
+                FWorldPartitionHelpers::DoCollectGarbage();
+            }
+            else
+            {
+                // Cell-only pass — no actor loading needed, skip CellRefs and GC entirely.
                 for (UWorldSweepScript* Script : PassScripts)
                 {
-                    if (!Script->bProcessActors)
-                    {
-                        continue;
-                    }
-
-                    if (!Script->ActorTagFilter.IsEmpty() && !PassesTagFilter(Actor, Script->ActorTagFilter))
-                    {
-                        continue;
-                    }
-
-                    Script->OnActorFound(Actor, CellBounds);
+                    if (Script->EventFlags & CellFlag) Script->OnCellStarted(CellBounds);
                 }
-
-                ++ActorsInCell;
-                ++Result.ActorsProcessed;
+                for (UWorldSweepScript* Script : PassScripts)
+                {
+                    if (Script->EventFlags & CellFlag) Script->OnCellCompleted(CellBounds);
+                }
             }
 
             UE_LOG(LogWorldSweep, Verbose, TEXT("WorldSweep [WP]: Pass %d | Cell %d | %d actors processed."),
                 PassIndex + 1, CellIndex, ActorsInCell);
-
-            for (UWorldSweepScript* Script : PassScripts)
-            {
-                if (Script->bHandleCellEvents)
-                {
-                    Script->OnCellCompleted(CellBounds);
-                }
-            }
-
-            if (CellLoader.IsValid())
-            {
-                CellLoader->Unload();
-                CellLoader.Reset();
-            }
-
-            FWorldPartitionHelpers::DoCollectGarbage();
 
             ++Result.CellsProcessed;
         }
@@ -282,8 +422,6 @@ FWorldSweepResult UWorldSweepRunner::ExecuteWorldPartition(const FBox& InSweepAr
 
     return Result;
 }
-
-// ---------------------------------------------------------------------------
 
 FWorldSweepResult UWorldSweepRunner::ExecuteStreamingLevels(const FBox& InSweepArea, UWorld* InWorld)
 {
@@ -310,8 +448,29 @@ FWorldSweepResult UWorldSweepRunner::ExecuteStreamingLevels(const FBox& InSweepA
         const int32 CurrentPriority = PriorityLevels[PassIndex];
         const TArray<UWorldSweepScript*>& PassScripts = ScriptsByPriority[CurrentPriority];
 
-        UE_LOG(LogWorldSweep, Log, TEXT("WorldSweep [Streaming]: Priority pass %d (level %d) | %d script(s)"),
-            PassIndex + 1, CurrentPriority, PassScripts.Num());
+        int32 PassFlags = 0;
+        for (const UWorldSweepScript* Script : PassScripts)
+        {
+            PassFlags |= Script->EventFlags;
+        }
+
+        const int32 CellFlag      = static_cast<int32>(EWorldSweepEventFlags::CellEvents);
+        const int32 ActorFlag     = static_cast<int32>(EWorldSweepEventFlags::Actors);
+        const int32 ComponentFlag = static_cast<int32>(EWorldSweepEventFlags::Components);
+
+        const bool bPassNeedsCellEvents = (PassFlags & CellFlag)                    != 0;
+        const bool bPassNeedsActors     = (PassFlags & (ActorFlag | ComponentFlag)) != 0;
+
+        UE_LOG(LogWorldSweep, Verbose, TEXT("WorldSweep [Streaming]: Priority pass %d (level %d) | %d script(s) | Cell: %s | Actors: %s | Components: %s"),
+            PassIndex + 1, CurrentPriority, PassScripts.Num(),
+            (PassFlags & CellFlag)      ? TEXT("Yes") : TEXT("No"),
+            (PassFlags & ActorFlag)     ? TEXT("Yes") : TEXT("No"),
+            (PassFlags & ComponentFlag) ? TEXT("Yes") : TEXT("No"));
+
+        if (!bPassNeedsCellEvents && !bPassNeedsActors)
+        {
+            continue;
+        }
 
         for (int32 LevelIndex = 0; LevelIndex < StreamingLevels.Num(); ++LevelIndex)
         {
@@ -339,10 +498,7 @@ FWorldSweepResult UWorldSweepRunner::ExecuteStreamingLevels(const FBox& InSweepA
             const FBox PreLoadBounds(EForceInit::ForceInit);
             for (UWorldSweepScript* Script : PassScripts)
             {
-                if (Script->bHandleCellEvents)
-                {
-                    Script->OnPreCellLoad(PreLoadBounds);
-                }
+                if (Script->EventFlags & CellFlag) Script->OnPreCellLoad(PreLoadBounds);
             }
 
             // Load the level if it is not already loaded, and restore state after.
@@ -409,43 +565,40 @@ FWorldSweepResult UWorldSweepRunner::ExecuteStreamingLevels(const FBox& InSweepA
 
             for (UWorldSweepScript* Script : PassScripts)
             {
-                if (Script->bHandleCellEvents)
-                {
-                    Script->OnCellStarted(CellBounds);
-                }
+                if (Script->EventFlags & CellFlag) Script->OnCellStarted(CellBounds);
             }
 
             int32 ActorsInLevel = 0;
-            for (const TObjectPtr<AActor>& ActorPtr : LoadedLevel->Actors)
+            if (bPassNeedsActors)
             {
-                AActor* Actor = ActorPtr.Get();
-                if (!Actor || !Actor->IsA(ActorClass))
+                for (const TObjectPtr<AActor>& ActorPtr : LoadedLevel->Actors)
                 {
-                    continue;
-                }
-
-                if (!PassesDataLayerFilter(Actor, DataLayerManager))
-                {
-                    continue;
-                }
-
-                for (UWorldSweepScript* Script : PassScripts)
-                {
-                    if (!Script->bProcessActors)
+                    AActor* Actor = ActorPtr.Get();
+                    if (!Actor || !Actor->IsA(ActorClass))
                     {
                         continue;
                     }
 
-                    if (!Script->ActorTagFilter.IsEmpty() && !PassesTagFilter(Actor, Script->ActorTagFilter))
+                    if (!PassesDataLayerFilter(Actor, DataLayerManager))
                     {
                         continue;
                     }
 
-                    Script->OnActorFound(Actor, CellBounds);
-                }
+                    for (UWorldSweepScript* Script : PassScripts)
+                    {
+                        if (!(Script->EventFlags & ActorFlag)) continue;
+                        if (!Script->ActorTagFilter.IsEmpty() && !PassesTagFilter(Actor, Script->ActorTagFilter)) continue;
+                        Script->OnActorFound(Actor, CellBounds);
+                    }
 
-                ++ActorsInLevel;
-                ++Result.ActorsProcessed;
+                    if (PassFlags & ComponentFlag)
+                    {
+                        DispatchComponentEvents(Actor, CellBounds, PassScripts);
+                    }
+
+                    ++ActorsInLevel;
+                    ++Result.ActorsProcessed;
+                }
             }
 
             UE_LOG(LogWorldSweep, Verbose, TEXT("WorldSweep [Streaming]: Pass %d | Level '%s' | %d actors processed."),
@@ -453,11 +606,11 @@ FWorldSweepResult UWorldSweepRunner::ExecuteStreamingLevels(const FBox& InSweepA
 
             for (UWorldSweepScript* Script : PassScripts)
             {
-                if (Script->bHandleCellEvents)
-                {
-                    Script->OnCellCompleted(CellBounds);
-                }
+                if (Script->EventFlags & CellFlag) Script->OnCellCompleted(CellBounds);
             }
+
+            // Save per-level while the level is still loaded and before GC runs.
+            SaveAndCheckOutDirtyPackages();
 
             if (!bWasLoaded)
             {
@@ -478,8 +631,6 @@ FWorldSweepResult UWorldSweepRunner::ExecuteStreamingLevels(const FBox& InSweepA
 
     return Result;
 }
-
-// ---------------------------------------------------------------------------
 
 FWorldSweepResult UWorldSweepRunner::ExecuteFlatLevel(const FBox& InSweepArea, UWorld* InWorld)
 {
@@ -525,54 +676,71 @@ FWorldSweepResult UWorldSweepRunner::ExecuteFlatLevel(const FBox& InSweepArea, U
         const int32 CurrentPriority = PriorityLevels[PassIndex];
         const TArray<UWorldSweepScript*>& PassScripts = ScriptsByPriority[CurrentPriority];
 
-        UE_LOG(LogWorldSweep, Log, TEXT("WorldSweep [Flat]: Priority pass %d (level %d) | %d script(s)"),
-            PassIndex + 1, CurrentPriority, PassScripts.Num());
+        int32 PassFlags = 0;
+        for (const UWorldSweepScript* Script : PassScripts)
+        {
+            PassFlags |= Script->EventFlags;
+        }
+
+        const int32 CellFlag      = static_cast<int32>(EWorldSweepEventFlags::CellEvents);
+        const int32 ActorFlag     = static_cast<int32>(EWorldSweepEventFlags::Actors);
+        const int32 ComponentFlag = static_cast<int32>(EWorldSweepEventFlags::Components);
+
+        const bool bPassNeedsCellEvents = (PassFlags & CellFlag)                    != 0;
+        const bool bPassNeedsActors     = (PassFlags & (ActorFlag | ComponentFlag)) != 0;
+
+        UE_LOG(LogWorldSweep, Verbose, TEXT("WorldSweep [Flat]: Priority pass %d (level %d) | %d script(s) | Cell: %s | Actors: %s | Components: %s"),
+            PassIndex + 1, CurrentPriority, PassScripts.Num(),
+            (PassFlags & CellFlag)      ? TEXT("Yes") : TEXT("No"),
+            (PassFlags & ActorFlag)     ? TEXT("Yes") : TEXT("No"),
+            (PassFlags & ComponentFlag) ? TEXT("Yes") : TEXT("No"));
+
+        if (!bPassNeedsCellEvents && !bPassNeedsActors)
+        {
+            continue;
+        }
 
         for (UWorldSweepScript* Script : PassScripts)
         {
-            if (Script->bHandleCellEvents)
-            {
-                Script->OnPreCellLoad(CellBounds);
-                Script->OnCellStarted(CellBounds);
-            }
+            if (Script->EventFlags & CellFlag) { Script->OnPreCellLoad(CellBounds); Script->OnCellStarted(CellBounds); }
         }
 
         int32 ActorsInPass = 0;
-        for (TActorIterator<AActor> It(InWorld, ActorClass); It; ++It)
+        if (bPassNeedsActors)
         {
-            AActor* Actor = *It;
-            if (!Actor)
+            for (TActorIterator<AActor> It(InWorld, ActorClass); It; ++It)
             {
-                continue;
-            }
-
-            if (InSweepArea.IsValid && !InSweepArea.IsInsideOrOn(Actor->GetActorLocation()))
-            {
-                continue;
-            }
-
-            if (!PassesDataLayerFilter(Actor, DataLayerManager))
-            {
-                continue;
-            }
-
-            for (UWorldSweepScript* Script : PassScripts)
-            {
-                if (!Script->bProcessActors)
+                AActor* Actor = *It;
+                if (!Actor)
                 {
                     continue;
                 }
 
-                if (!Script->ActorTagFilter.IsEmpty() && !PassesTagFilter(Actor, Script->ActorTagFilter))
+                if (InSweepArea.IsValid && !InSweepArea.IsInsideOrOn(Actor->GetActorLocation()))
                 {
                     continue;
                 }
 
-                Script->OnActorFound(Actor, CellBounds);
-            }
+                if (!PassesDataLayerFilter(Actor, DataLayerManager))
+                {
+                    continue;
+                }
 
-            ++ActorsInPass;
-            ++Result.ActorsProcessed;
+                for (UWorldSweepScript* Script : PassScripts)
+                {
+                    if (!(Script->EventFlags & ActorFlag)) continue;
+                    if (!Script->ActorTagFilter.IsEmpty() && !PassesTagFilter(Actor, Script->ActorTagFilter)) continue;
+                    Script->OnActorFound(Actor, CellBounds);
+                }
+
+                if (PassFlags & ComponentFlag)
+                {
+                    DispatchComponentEvents(Actor, CellBounds, PassScripts);
+                }
+
+                ++ActorsInPass;
+                ++Result.ActorsProcessed;
+            }
         }
 
         UE_LOG(LogWorldSweep, Verbose, TEXT("WorldSweep [Flat]: Pass %d | %d actors processed."),
@@ -580,10 +748,7 @@ FWorldSweepResult UWorldSweepRunner::ExecuteFlatLevel(const FBox& InSweepArea, U
 
         for (UWorldSweepScript* Script : PassScripts)
         {
-            if (Script->bHandleCellEvents)
-            {
-                Script->OnCellCompleted(CellBounds);
-            }
+            if (Script->EventFlags & CellFlag) Script->OnCellCompleted(CellBounds);
         }
 
         ++Result.CellsProcessed;
@@ -591,8 +756,6 @@ FWorldSweepResult UWorldSweepRunner::ExecuteFlatLevel(const FBox& InSweepArea, U
 
     return Result;
 }
-
-// ---------------------------------------------------------------------------
 
 void UWorldSweepRunner::BuildCellGrid(const FBox& InSweepArea, float InCellSize)
 {
@@ -608,6 +771,154 @@ void UWorldSweepRunner::BuildCellGrid(const FBox& InSweepArea, float InCellSize)
             const FVector CellMin(X, Y, Min.Z);
             const FVector CellMax(FMath::Min(X + InCellSize, Max.X), FMath::Min(Y + InCellSize, Max.Y), Max.Z);
             CellGrid.Add(FBox(CellMin, CellMax));
+        }
+    }
+}
+
+void UWorldSweepRunner::SetupSaveTracking()
+{
+    SweepDirtyPackages.Reset();
+    PreSweepDirtyPackageNames.Reset();
+
+    if (!bSaveModifications)
+    {
+        return;
+    }
+
+    // Snapshot packages already dirty before the sweep so we don't save work that isn't ours.
+    for (TObjectIterator<UPackage> It; It; ++It)
+    {
+        if (It->IsDirty())
+        {
+            PreSweepDirtyPackageNames.Add(It->GetFName());
+        }
+    }
+
+    PackageDirtyHandle = UPackage::PackageDirtyStateChangedEvent.AddLambda(
+        [this](UPackage* Package)
+        {
+            if (Package && Package->IsDirty() && !PreSweepDirtyPackageNames.Contains(Package->GetFName()))
+            {
+                SweepDirtyPackages.AddUnique(Package);
+            }
+        });
+}
+
+void UWorldSweepRunner::TeardownSaveTracking()
+{
+    if (PackageDirtyHandle.IsValid())
+    {
+        UPackage::PackageDirtyStateChangedEvent.Remove(PackageDirtyHandle);
+        PackageDirtyHandle.Reset();
+    }
+
+    SweepDirtyPackages.Reset();
+    PreSweepDirtyPackageNames.Reset();
+}
+
+void UWorldSweepRunner::SaveAndCheckOutDirtyPackages()
+{
+    if (!bSaveModifications)
+    {
+        return;
+    }
+
+    // Prune entries that are no longer valid or have already been saved (no longer dirty).
+    SweepDirtyPackages.RemoveAll([](const TObjectPtr<UPackage>& Pkg)
+    {
+        return !IsValid(Pkg) || !Pkg->IsDirty();
+    });
+
+    if (SweepDirtyPackages.IsEmpty())
+    {
+        return;
+    }
+
+    UE_LOG(LogWorldSweep, Log, TEXT("WorldSweep: Saving %d package(s) dirtied during sweep..."), SweepDirtyPackages.Num());
+
+    const bool bSCEnabled = ISourceControlModule::Get().IsEnabled();
+
+    // Collect file paths and separate existing files from new (not yet on disk) ones.
+    TSet<FString> ExistingFilePaths;
+    TArray<FString> NewFilePaths;
+
+    for (const TObjectPtr<UPackage>& Pkg : SweepDirtyPackages)
+    {
+        if (!IsValid(Pkg)) continue;
+
+        FString FilePath;
+        if (!FPackageName::TryConvertLongPackageNameToFilename(Pkg->GetName(), FilePath, FPackageName::GetAssetPackageExtension()))
+        {
+            continue;
+        }
+
+        if (IFileManager::Get().FileExists(*FilePath))
+        {
+            ExistingFilePaths.Add(FilePath);
+        }
+        else
+        {
+            NewFilePaths.Add(FilePath);
+        }
+    }
+
+    // Checkout existing files before saving so the write isn't rejected by the SCC provider.
+    if (bSCEnabled && !ExistingFilePaths.IsEmpty())
+    {
+        SourceControlHelpers::CheckOutOrAddFiles(ExistingFilePaths.Array());
+    }
+
+    // Save all dirty packages silently (no prompts).
+    TArray<UPackage*> PackagesToSave;
+    PackagesToSave.Reserve(SweepDirtyPackages.Num());
+    for (const TObjectPtr<UPackage>& Pkg : SweepDirtyPackages)
+    {
+        if (IsValid(Pkg))
+        {
+            PackagesToSave.Add(Pkg.Get());
+        }
+    }
+    UEditorLoadingAndSavingUtils::SavePackages(PackagesToSave, false);
+
+    // Mark-for-add files that were just created and didn't exist before the save.
+    if (bSCEnabled && !NewFilePaths.IsEmpty())
+    {
+        TArray<FString> CreatedFilePaths;
+        for (const FString& Path : NewFilePaths)
+        {
+            if (IFileManager::Get().FileExists(*Path))
+            {
+                CreatedFilePaths.Add(Path);
+            }
+        }
+        if (!CreatedFilePaths.IsEmpty())
+        {
+            SourceControlHelpers::CheckOutOrAddFiles(CreatedFilePaths);
+        }
+    }
+
+    SweepDirtyPackages.Reset();
+}
+
+void UWorldSweepRunner::DispatchComponentEvents(AActor* InActor, const FBox& InCellBounds, const TArray<UWorldSweepScript*>& InPassScripts)
+{
+    const int32 ComponentFlag = static_cast<int32>(EWorldSweepEventFlags::Components);
+
+    TArray<UActorComponent*> Components;
+    InActor->GetComponents(Components);
+
+    for (UActorComponent* Comp : Components)
+    {
+        if (!Comp)
+        {
+            continue;
+        }
+
+        for (UWorldSweepScript* Script : InPassScripts)
+        {
+            if (!(Script->EventFlags & ComponentFlag)) continue;
+            if (!Script->ActorTagFilter.IsEmpty() && !PassesTagFilter(InActor, Script->ActorTagFilter)) continue;
+            Script->OnComponentFound(Comp, InActor, InCellBounds);
         }
     }
 }

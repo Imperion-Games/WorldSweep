@@ -30,6 +30,7 @@ public class WorldSweep : ModuleRules
             "MessageLog",
             "Projects",
             "LevelEditor",
+            "SourceControl",
         });
     }
 }

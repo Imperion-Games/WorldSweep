@@ -19,8 +19,6 @@ DEFINE_LOG_CATEGORY(LogWorldSweep);
 
 const FName FWorldSweepModule::WorldSweepTabName = TEXT("WorldSweep");
 
-// ---------------------------------------------------------------------------
-
 void FWorldSweepModule::StartupModule()
 {
     FWorldSweepStyle::Initialize();
@@ -73,8 +71,6 @@ void FWorldSweepModule::ShutdownModule()
 
     FWorldSweepStyle::Shutdown();
 }
-
-// ---------------------------------------------------------------------------
 
 void FWorldSweepModule::RegisterMenus()
 {
@@ -137,7 +133,8 @@ void FWorldSweepModule::RegisterWorldSweepTabs(TSharedPtr<FTabManager> InTabMana
     )
     .SetDisplayName(LOCTEXT("WorldSweepTabTitle", "WorldSweep"))
     .SetTooltipText(LOCTEXT("WorldSweepTabTooltip", "Batch script execution across World Partition maps."))
-    .SetIcon(FSlateIcon(FWorldSweepStyle::GetStyleSetName(), "WorldSweep.MenuIcon"));
+    .SetIcon(FSlateIcon(FWorldSweepStyle::GetStyleSetName(), "WorldSweep.MenuIcon"))
+    .SetMenuType(ETabSpawnerMenuType::Hidden);
 }
 
 #undef LOCTEXT_NAMESPACE

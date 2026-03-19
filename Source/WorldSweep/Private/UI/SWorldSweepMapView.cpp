@@ -11,8 +11,6 @@
 // Maximum number of cell lines to draw before skipping the grid (avoids overdraw on huge worlds at low zoom).
 static constexpr int32 MaxCellGridLines = 300;
 
-// ---------------------------------------------------------------------------
-
 void SWorldSweepMapView::Construct(const FArguments& InArgs)
 {
     World              = InArgs._InWorld;
@@ -28,7 +26,7 @@ void SWorldSweepMapView::Construct(const FArguments& InArgs)
     {
         if (UWorldPartition* WP = W->GetWorldPartition())
         {
-            WorldBounds = WP->GetRuntimeWorldBounds();
+            WorldBounds = WP->GetEditorWorldBounds();
         }
     }
 
@@ -50,8 +48,6 @@ SWorldSweepMapView::~SWorldSweepMapView()
     FEditorDelegates::MapChange.Remove(MapChangeHandle);
 }
 
-// ---------------------------------------------------------------------------
-
 void SWorldSweepMapView::OnEditorMapChanged(uint32 /*ChangeType*/)
 {
     UWorld* NewWorld = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
@@ -62,7 +58,7 @@ void SWorldSweepMapView::OnEditorMapChanged(uint32 /*ChangeType*/)
     {
         if (UWorldPartition* WP = NewWorld->GetWorldPartition())
         {
-            WorldBounds = WP->GetRuntimeWorldBounds();
+            WorldBounds = WP->GetEditorWorldBounds();
         }
     }
 
@@ -78,7 +74,6 @@ void SWorldSweepMapView::OnEditorMapChanged(uint32 /*ChangeType*/)
     bShiftHeld  = false;
 }
 
-// ---------------------------------------------------------------------------
 // View helpers
 
 SWorldSweepMapView::FViewBox SWorldSweepMapView::GetViewBox(const FGeometry& InGeometry) const
@@ -118,7 +113,6 @@ FVector2D SWorldSweepMapView::LocalToWorld(const FVector2D& InLocalPos, const FV
     );
 }
 
-// ---------------------------------------------------------------------------
 // Paint
 
 int32 SWorldSweepMapView::OnPaint(
@@ -341,7 +335,6 @@ void SWorldSweepMapView::PaintCursorCoordinates(const FGeometry& Geo, FSlateWind
     ++LayerId;
 }
 
-// ---------------------------------------------------------------------------
 // Input
 
 FReply SWorldSweepMapView::OnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
@@ -418,9 +411,11 @@ FReply SWorldSweepMapView::OnMouseButtonUp(const FGeometry& MyGeometry, const FP
 
         if ((SelectMax - SelectMin).GetMin() > 100.f) // ignore tiny accidental drags
         {
+            // Use the full legal world height so no actors at extreme Z are missed.
+            static constexpr float HalfWorldMax = 1048576.0f;
             const FBox NewArea(
-                FVector(SelectMin.X, SelectMin.Y, WorldBounds.Min.Z),
-                FVector(SelectMax.X, SelectMax.Y, WorldBounds.Max.Z)
+                FVector(SelectMin.X, SelectMin.Y, -HalfWorldMax),
+                FVector(SelectMax.X, SelectMax.Y,  HalfWorldMax)
             );
             OnSweepAreaChanged.ExecuteIfBound(NewArea);
         }

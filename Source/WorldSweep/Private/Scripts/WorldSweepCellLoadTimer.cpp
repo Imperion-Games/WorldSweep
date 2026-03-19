@@ -11,8 +11,7 @@ UWorldSweepCellLoadTimer::UWorldSweepCellLoadTimer()
     , MaxLoadTime(0.0)
     , CellsRecorded(0)
 {
-    bHandleCellEvents = true;
-    bProcessActors = false;
+    EventFlags = static_cast<int32>(EWorldSweepEventFlags::CellEvents);
 }
 
 void UWorldSweepCellLoadTimer::OnBatchStarted_Implementation()
@@ -44,7 +43,7 @@ void UWorldSweepCellLoadTimer::OnCellStarted_Implementation(const FBox& InCellBo
         LoadTime, *InCellBounds.GetCenter().ToString());
 }
 
-void UWorldSweepCellLoadTimer::OnBatchCompleted_Implementation(int32 InTotalCellsProcessed)
+void UWorldSweepCellLoadTimer::OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool bWasCancelled)
 {
     if (CellsRecorded == 0)
     {

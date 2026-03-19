@@ -44,4 +44,8 @@ public:
     /** Iteration strategy. Auto detects the correct mode at runtime from the world type. Override only when Auto produces unexpected results. */
     UPROPERTY(EditAnywhere, Category = "WorldSweep|Batch")
     EWorldSweepMode SweepMode;
+
+    /** When enabled, packages dirtied by scripts during the sweep are saved automatically. In World Partition and Streaming Levels modes packages are saved per-cell before GC runs; in Flat Level mode they are saved at the end of the batch. Source control checkout is attempted automatically when a source control provider is active. */
+    UPROPERTY(EditAnywhere, Category = "WorldSweep|Batch")
+    bool bSaveModifications;
 };

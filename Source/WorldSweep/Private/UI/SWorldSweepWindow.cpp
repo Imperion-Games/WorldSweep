@@ -269,8 +269,6 @@ SWorldSweepWindow::~SWorldSweepWindow()
     FEditorDelegates::MapChange.Remove(WindowMapChangeHandle);
 }
 
-// ---------------------------------------------------------------------------
-
 void SWorldSweepWindow::RefreshWorldMode()
 {
     UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
@@ -299,8 +297,6 @@ void SWorldSweepWindow::OnWorldMapChanged(uint32 /*InChangeType*/)
     RefreshWorldMode();
 }
 
-// ---------------------------------------------------------------------------
-
 int32 SWorldSweepWindow::GetLeftPanelIndex() const
 {
     switch (DetectedMode)
@@ -323,8 +319,6 @@ EVisibility SWorldSweepWindow::GetUseEntireWorldVisibility() const
     return DetectedMode == EWorldSweepMode::StreamingLevels ? EVisibility::Collapsed : EVisibility::Visible;
 }
 
-// ---------------------------------------------------------------------------
-
 FString SWorldSweepWindow::GetBatchAssetPath() const
 {
     if (SelectedBatch)
@@ -339,8 +333,6 @@ void SWorldSweepWindow::OnBatchAssetChanged(const FAssetData& InAssetData)
     SelectedBatch = Cast<UWorldSweepBatch>(InAssetData.GetAsset());
 }
 
-// ---------------------------------------------------------------------------
-
 FReply SWorldSweepWindow::OnUseEntireWorldClicked()
 {
     UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
@@ -353,7 +345,10 @@ FReply SWorldSweepWindow::OnUseEntireWorldClicked()
     {
         // Start with WP runtime bounds then expand to include any persistent-level
         // actors that live outside the WP grid (e.g. placed in the persistent level).
-        SweepArea = WP->GetRuntimeWorldBounds();
+        // GetEditorWorldBounds covers all WP cells, including those outside
+        // the runtime streaming range. GetRuntimeWorldBounds can be smaller
+        // than the actual grid, causing edge cells to be missed entirely.
+        SweepArea = WP->GetEditorWorldBounds();
         for (TActorIterator<AActor> It(World); It; ++It)
         {
             if (*It && !(*It)->IsA<AWorldSettings>())
@@ -361,6 +356,12 @@ FReply SWorldSweepWindow::OnUseEntireWorldClicked()
                 SweepArea += (*It)->GetActorLocation();
             }
         }
+
+        // Pin Z to full legal world height so sky/atmosphere actors at extreme
+        // altitudes are never clipped by the cell bounds check.
+        static constexpr float HalfWorldMax = 1048576.0f;
+        SweepArea.Min.Z = -HalfWorldMax;
+        SweepArea.Max.Z =  HalfWorldMax;
     }
     else
     {
@@ -396,8 +397,6 @@ void SWorldSweepWindow::OnMapSweepAreaChanged(const FBox& InBox)
 {
     SweepArea = InBox;
 }
-
-// ---------------------------------------------------------------------------
 
 TOptional<float> SWorldSweepWindow::GetMinX() const
 {
@@ -442,8 +441,6 @@ void SWorldSweepWindow::OnMaxYCommitted(float InValue, ETextCommit::Type)
     SweepArea.Max.Y = InValue;
     SweepArea.IsValid = (SweepArea.Max.X > SweepArea.Min.X) && (SweepArea.Max.Y > SweepArea.Min.Y);
 }
-
-// ---------------------------------------------------------------------------
 
 bool SWorldSweepWindow::CanRun() const
 {

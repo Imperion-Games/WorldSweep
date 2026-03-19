@@ -60,6 +60,12 @@ private:
     void BuildCellGrid(const FBox& InSweepArea, float InCellSize);
     bool PassesTagFilter(const AActor* InActor, const TArray<FName>& InTagFilter) const;
     bool PassesDataLayerFilter(const AActor* InActor, const UDataLayerManager* InDataLayerManager) const;
+    void DispatchComponentEvents(AActor* InActor, const FBox& InCellBounds, const TArray<UWorldSweepScript*>& InPassScripts);
+
+    // Save / source-control helpers
+    void SetupSaveTracking();
+    void TeardownSaveTracking();
+    void SaveAndCheckOutDirtyPackages();
 
 private:
 
@@ -73,4 +79,14 @@ private:
     TArray<int32> PriorityLevels;
     TObjectPtr<UClass> ActorClass;
     TObjectPtr<const UDataLayerManager> DataLayerManager;
+
+    // Packages dirtied by scripts during the current sweep (UPROPERTY keeps them GC-safe).
+    UPROPERTY()
+    TArray<TObjectPtr<UPackage>> SweepDirtyPackages;
+
+    // Names of packages already dirty before the sweep started — excluded from tracking.
+    TSet<FName> PreSweepDirtyPackageNames;
+
+    FDelegateHandle PackageDirtyHandle;
+    bool bSaveModifications;
 };

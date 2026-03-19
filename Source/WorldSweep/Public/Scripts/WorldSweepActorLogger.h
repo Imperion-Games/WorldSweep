@@ -17,7 +17,7 @@ protected:
     virtual void OnBatchStarted_Implementation() override;
     virtual void OnCellStarted_Implementation(const FBox& InCellBounds) override;
     virtual void OnActorFound_Implementation(AActor* InActor, const FBox& InCellBounds) override;
-    virtual void OnBatchCompleted_Implementation(int32 InTotalCellsProcessed) override;
+    virtual void OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool bWasCancelled) override;
     //~ End UWorldSweepScript Interface
 
 public:
