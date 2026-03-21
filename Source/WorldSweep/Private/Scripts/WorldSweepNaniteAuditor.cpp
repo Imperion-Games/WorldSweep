@@ -49,10 +49,10 @@ void UWorldSweepNaniteAuditor::OnComponentFound_Implementation(UActorComponent* 
 
     if (bApplyChanges)
     {
+        Mesh->Modify();
         FMeshNaniteSettings NewSettings = Mesh->GetNaniteSettings();
         NewSettings.bEnabled = bEnableNanite;
         Mesh->SetNaniteSettings(NewSettings);
-        Mesh->MarkPackageDirty();
         ++ChangedCount;
 
         UE_LOG(LogWorldSweep, Log, TEXT("[NaniteAuditor] Nanite %s → '%s' (referenced by '%s')"),

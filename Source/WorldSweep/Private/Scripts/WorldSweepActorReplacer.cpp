@@ -87,7 +87,8 @@ void UWorldSweepActorReplacer::OnCellCompleted_Implementation(const FBox& InCell
             continue;
         }
 
-        // Destroy the source actor first.
+        // Modify before destroy so the transaction captures the pre-change state.
+        Candidate.Actor->Modify();
         Candidate.Actor->Destroy();
 
         // Spawn the replacement in the same level at the same transform.
@@ -105,6 +106,8 @@ void UWorldSweepActorReplacer::OnCellCompleted_Implementation(const FBox& InCell
             continue;
         }
 
+        NewActor->Modify();
+
         if (bCopyLabel)
         {
             NewActor->SetActorLabel(Candidate.Label);
@@ -114,8 +117,6 @@ void UWorldSweepActorReplacer::OnCellCompleted_Implementation(const FBox& InCell
         {
             NewActor->Tags = Candidate.Tags;
         }
-
-        NewActor->MarkPackageDirty();
 
         UE_LOG(LogWorldSweep, Log, TEXT("[ActorReplacer] Replaced '%s': %s → %s"),
             *Candidate.Label,

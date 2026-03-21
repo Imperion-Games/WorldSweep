@@ -21,6 +21,7 @@
 #include "Misc/PackageName.h"
 #include "HAL/FileManager.h"
 #include "UObject/Package.h"
+#include "ScopedTransaction.h"
 
 FWorldSweepResult::FWorldSweepResult()
     : CellsProcessed(0)
@@ -95,6 +96,9 @@ FWorldSweepResult UWorldSweepRunner::Execute(UWorldSweepBatch* InBatch, const FB
 
     bSaveModifications = InBatch->bSaveModifications;
     SetupSaveTracking();
+
+    FScopedTransaction Transaction(FText::Format(
+        INVTEXT("World Sweep: {0}"), FText::FromString(InBatch->GetName())));
 
     // Warn for any script that opted into no events — it will silently do nothing.
     for (const TObjectPtr<UWorldSweepScript>& Script : ActiveScripts)

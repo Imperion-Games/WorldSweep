@@ -43,8 +43,8 @@ void UWorldSweepCollisionProfileSetter::OnComponentFound_Implementation(UActorCo
 
     if (bApplyChanges)
     {
+        Comp->Modify();
         Comp->SetCollisionProfileName(CollisionProfileName);
-        InActor->MarkPackageDirty();
         ++ChangedCount;
 
         UE_LOG(LogWorldSweep, Log, TEXT("[CollisionSetter] '%s/%s': '%s' → '%s'"),
