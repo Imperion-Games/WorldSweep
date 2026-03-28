@@ -463,7 +463,7 @@ FReply SWorldSweepWindow::OnRunClicked()
     UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
     if (!World)
     {
-        UE_LOG(LogWorldSweep, Error, TEXT("WorldSweep: No editor world found. Cannot run batch."));
+        WS_NOTIFY_ERROR(TEXT("WorldSweep: No editor world found. Cannot run batch."));
         return FReply::Handled();
     }
 

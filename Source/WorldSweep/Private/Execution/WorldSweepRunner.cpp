@@ -43,13 +43,13 @@ FWorldSweepResult UWorldSweepRunner::Execute(UWorldSweepBatch* InBatch, const FB
 
     if (!ensure(InBatch) || !ensure(InWorld))
     {
-        UE_LOG(LogWorldSweep, Error, TEXT("Execute called with null batch or world. Aborting."));
+        WS_NOTIFY_ERROR(TEXT("WorldSweep: Execute called with null batch or world. Aborting."));
         return Result;
     }
 
     if (InBatch->Scripts.IsEmpty())
     {
-        UE_LOG(LogWorldSweep, Warning, TEXT("Batch '%s' has no scripts. Nothing to execute."), *InBatch->GetName());
+        WS_NOTIFY_WARNING(TEXT("WorldSweep: Batch '%s' has no scripts. Nothing to execute."), *InBatch->GetName());
         return Result;
     }
 
@@ -101,13 +101,20 @@ FWorldSweepResult UWorldSweepRunner::Execute(UWorldSweepBatch* InBatch, const FB
         INVTEXT("World Sweep: {0}"), FText::FromString(InBatch->GetName())));
 
     // Warn for any script that opted into no events — it will silently do nothing.
+    // Collect all offenders and emit a single combined warning so the log and
+    // notification toast are not duplicated per script.
+    TArray<FString> ZeroFlagScripts;
     for (const TObjectPtr<UWorldSweepScript>& Script : ActiveScripts)
     {
         if (Script->EventFlags == 0)
         {
-            UE_LOG(LogWorldSweep, Warning, TEXT("WorldSweep: Script '%s' has EventFlags = 0 and will not receive any events."),
-                *Script->GetClass()->GetName());
+            ZeroFlagScripts.Add(Script->GetClass()->GetName());
         }
+    }
+    if (!ZeroFlagScripts.IsEmpty())
+    {
+        WS_NOTIFY_WARNING(TEXT("WorldSweep: %d script(s) have EventFlags = 0 and will receive no events: %s"),
+            ZeroFlagScripts.Num(), *FString::Join(ZeroFlagScripts, TEXT(", ")));
     }
 
     for (const TObjectPtr<UWorldSweepScript>& Script : ActiveScripts)
@@ -185,26 +192,26 @@ FWorldSweepResult UWorldSweepRunner::ExecuteWorldPartition(const FBox& InSweepAr
 
     if (!InSweepArea.IsValid)
     {
-        UE_LOG(LogWorldSweep, Error, TEXT("WorldSweep [WP]: Sweep area is invalid. Aborting."));
+        WS_NOTIFY_ERROR(TEXT("WorldSweep [WP]: Sweep area is invalid. Aborting."));
         return Result;
     }
 
     if (CellGrid.IsEmpty())
     {
-        UE_LOG(LogWorldSweep, Warning, TEXT("WorldSweep [WP]: Cell grid is empty for the given area and cell size. Aborting."));
+        WS_NOTIFY_WARNING(TEXT("WorldSweep [WP]: Cell grid is empty for the given area and cell size. Aborting."));
         return Result;
     }
 
     if (!InWP)
     {
-        UE_LOG(LogWorldSweep, Error, TEXT("WorldSweep [WP]: World Partition is null. Aborting."));
+        WS_NOTIFY_ERROR(TEXT("WorldSweep [WP]: World Partition is null. Aborting."));
         return Result;
     }
 
     UActorDescContainerInstance* Container = InWP->GetActorDescContainerInstance();
     if (!Container)
     {
-        UE_LOG(LogWorldSweep, Error, TEXT("WorldSweep [WP]: Failed to get actor descriptor container. Aborting."));
+        WS_NOTIFY_ERROR(TEXT("WorldSweep [WP]: Failed to get actor descriptor container. Aborting."));
         return Result;
     }
 
@@ -434,7 +441,7 @@ FWorldSweepResult UWorldSweepRunner::ExecuteStreamingLevels(const FBox& InSweepA
     const TArray<ULevelStreaming*>& StreamingLevels = InWorld->GetStreamingLevels();
     if (StreamingLevels.IsEmpty())
     {
-        UE_LOG(LogWorldSweep, Warning, TEXT("WorldSweep [Streaming]: No streaming levels found. Aborting."));
+        WS_NOTIFY_WARNING(TEXT("WorldSweep [Streaming]: No streaming levels found. Aborting."));
         return Result;
     }
 
