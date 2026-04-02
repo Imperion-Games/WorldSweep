@@ -12,4 +12,6 @@ on:
 jobs:
   release:
     uses: Imperion-Games/.github/.github/workflows/release-plugin.yml@main
+    permissions:
+      contents: write
     secrets: inherit
