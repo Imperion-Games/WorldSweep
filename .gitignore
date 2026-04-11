@@ -76,3 +76,4 @@ DerivedDataCache/*
 
 # Claude Code metadata
 .claude/
+CLAUDE.md
