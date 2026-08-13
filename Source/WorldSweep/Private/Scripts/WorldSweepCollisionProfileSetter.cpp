@@ -1,9 +1,11 @@
 // Copyright © ToaGames. All Rights Reserved.
 
 #include "Scripts/WorldSweepCollisionProfileSetter.h"
-#include "WorldSweepLog.h"
-#include "GameFramework/Actor.h"
+
 #include "Components/PrimitiveComponent.h"
+#include "GameFramework/Actor.h"
+
+#include "WorldSweepLog.h"
 
 UWorldSweepCollisionProfileSetter::UWorldSweepCollisionProfileSetter()
     : CollisionProfileName(NAME_None)
@@ -55,7 +57,7 @@ void UWorldSweepCollisionProfileSetter::OnComponentFound_Implementation(UActorCo
     }
     else
     {
-        UE_LOG(LogWorldSweep, Warning, TEXT("[CollisionSetter] Profile mismatch — '%s/%s' has '%s', expected '%s'"),
+        UE_LOG(LogWorldSweep, Warning, TEXT("[CollisionSetter] Profile mismatch: '%s/%s' has '%s', expected '%s'"),
             *InActor->GetActorLabel(),
             *Comp->GetName(),
             *CurrentProfile.ToString(),
@@ -63,7 +65,7 @@ void UWorldSweepCollisionProfileSetter::OnComponentFound_Implementation(UActorCo
     }
 }
 
-void UWorldSweepCollisionProfileSetter::OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool bWasCancelled)
+void UWorldSweepCollisionProfileSetter::OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool WasCancelled)
 {
     if (bApplyChanges)
     {

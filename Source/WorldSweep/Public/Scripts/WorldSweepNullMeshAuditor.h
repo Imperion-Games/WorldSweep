@@ -15,16 +15,16 @@ class WORLDSWEEP_API UWorldSweepNullMeshAuditor : public UWorldSweepScript
 {
     GENERATED_BODY()
 
-    //~ Begin UWorldSweepScript Interface
-protected:
-    virtual void OnBatchStarted_Implementation() override;
-    virtual void OnComponentFound_Implementation(UActorComponent* InComponent, AActor* InActor, const FBox& InCellBounds) override;
-    virtual void OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool bWasCancelled) override;
-    //~ End UWorldSweepScript Interface
-
 public:
 
     UWorldSweepNullMeshAuditor();
+
+    //~ Begin UWorldSweepScript Interface
+    virtual void OnBatchStarted_Implementation() override;
+    virtual void OnComponentFound_Implementation(UActorComponent* InComponent, AActor* InActor, const FBox& InCellBounds) override;
+    virtual void OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool WasCancelled) override;
+    virtual bool HasFailed_Implementation() const override;
+    //~ End UWorldSweepScript Interface
 
     /** When true, audits UStaticMeshComponents for null static mesh assets. */
     UPROPERTY(EditAnywhere, Category = "WorldSweep|NullMeshAuditor")

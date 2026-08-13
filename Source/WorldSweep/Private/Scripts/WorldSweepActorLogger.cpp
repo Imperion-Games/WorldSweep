@@ -1,8 +1,10 @@
 // Copyright © ToaGames. All Rights Reserved.
 
 #include "Scripts/WorldSweepActorLogger.h"
-#include "WorldSweepLog.h"
+
 #include "GameFramework/Actor.h"
+
+#include "WorldSweepLog.h"
 
 UWorldSweepActorLogger::UWorldSweepActorLogger()
     : bLogActorLocation(false)
@@ -48,7 +50,7 @@ void UWorldSweepActorLogger::OnActorFound_Implementation(AActor* InActor, const 
     ++TotalActorsLogged;
 }
 
-void UWorldSweepActorLogger::OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool bWasCancelled)
+void UWorldSweepActorLogger::OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool WasCancelled)
 {
     UE_LOG(LogWorldSweep, Log, TEXT("[ActorLogger] Batch complete. Total actors logged: %d across %d cells."),
         TotalActorsLogged,

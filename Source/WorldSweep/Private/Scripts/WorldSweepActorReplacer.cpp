@@ -1,9 +1,12 @@
 // Copyright © ToaGames. All Rights Reserved.
 
 #include "Scripts/WorldSweepActorReplacer.h"
-#include "WorldSweepLog.h"
-#include "GameFramework/Actor.h"
+
+#include "Engine/Level.h"
 #include "Engine/World.h"
+#include "GameFramework/Actor.h"
+
+#include "WorldSweepLog.h"
 
 UWorldSweepActorReplacer::UWorldSweepActorReplacer()
     : bMatchExactClass(false)
@@ -74,26 +77,27 @@ void UWorldSweepActorReplacer::OnCellCompleted_Implementation(const FBox& InCell
 
     if (!World)
     {
-        UE_LOG(LogWorldSweep, Error, TEXT("[ActorReplacer] World is null — cannot spawn replacement actors."));
+        UE_LOG(LogWorldSweep, Error, TEXT("[ActorReplacer] World is null. Cannot spawn replacement actors."));
         PendingReplacements.Reset();
         return;
     }
 
     for (const FReplacementCandidate& Candidate : PendingReplacements)
     {
-        if (!IsValid(Candidate.Actor))
+        AActor* SourceActor = Candidate.Actor.Get();
+        if (!IsValid(SourceActor))
         {
             ++FailedCount;
             continue;
         }
 
         // Modify before destroy so the transaction captures the pre-change state.
-        Candidate.Actor->Modify();
-        Candidate.Actor->Destroy();
+        SourceActor->Modify();
+        SourceActor->Destroy();
 
         // Spawn the replacement in the same level at the same transform.
         FActorSpawnParameters Params;
-        Params.OverrideLevel           = Candidate.Level;
+        Params.OverrideLevel           = Candidate.Level.Get();
         Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
         AActor* NewActor = World->SpawnActor<AActor>(TargetClass, Candidate.Transform, Params);
@@ -129,7 +133,7 @@ void UWorldSweepActorReplacer::OnCellCompleted_Implementation(const FBox& InCell
     PendingReplacements.Reset();
 }
 
-void UWorldSweepActorReplacer::OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool bWasCancelled)
+void UWorldSweepActorReplacer::OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool WasCancelled)
 {
     if (bApplyChanges)
     {

@@ -1,4 +1,4 @@
-# Plugin release trigger — copy this file unchanged to every plugin repo.
+# Plugin release trigger: copy this file unchanged to every plugin repo.
 # Push a tag like:  git tag v1.1 && git push origin v1.1
 # All release logic lives in the shared reusable workflow at Imperion-Games/.github.
 

@@ -1,17 +1,18 @@
 // Copyright © ToaGames. All Rights Reserved.
 
 #include "WorldSweepModule.h"
-#include "WorldSweepLog.h"
-#include "WorldSweepStyle.h"
-#include "UI/SWorldSweepWindow.h"
 
-#include "Framework/Docking/TabManager.h"
 #include "Framework/Docking/LayoutExtender.h"
-#include "Widgets/Docking/SDockTab.h"
-#include "ToolMenus.h"
+#include "Framework/Docking/TabManager.h"
+#include "LevelEditor.h"
 #include "Logging/MessageLog.h"
 #include "MessageLogModule.h"
-#include "LevelEditor.h"
+#include "ToolMenus.h"
+#include "Widgets/Docking/SDockTab.h"
+
+#include "UI/SWorldSweepWindow.h"
+#include "WorldSweepLog.h"
+#include "WorldSweepStyle.h"
 
 #define LOCTEXT_NAMESPACE "FWorldSweepModule"
 
@@ -106,23 +107,11 @@ void FWorldSweepModule::RegisterMenus()
     );
 }
 
-void FWorldSweepModule::RegisterWorldSweepLayout(FLayoutExtender& InExtender)
-{
-    // Default position: open alongside the World Partition Editor tab.
-    // This takes effect on fresh installs and when the user resets their layout.
-    // After first arrangement the level editor persists the layout automatically.
-    InExtender.ExtendLayout(
-        FTabId("WorldBrowserPartitionEditor"),
-        ELayoutExtensionPosition::After,
-        FTabManager::FTab(WorldSweepTabName, ETabState::ClosedTab)
-    );
-}
-
 void FWorldSweepModule::RegisterWorldSweepTabs(TSharedPtr<FTabManager> InTabManager)
 {
     InTabManager->RegisterTabSpawner(
         WorldSweepTabName,
-        FOnSpawnTab::CreateLambda([](const FSpawnTabArgs& Args) -> TSharedRef<SDockTab>
+        FOnSpawnTab::CreateLambda([](const FSpawnTabArgs& InSpawnArgs) -> TSharedRef<SDockTab>
         {
             return SNew(SDockTab)
                 .TabRole(ETabRole::NomadTab)
@@ -135,6 +124,18 @@ void FWorldSweepModule::RegisterWorldSweepTabs(TSharedPtr<FTabManager> InTabMana
     .SetTooltipText(LOCTEXT("WorldSweepTabTooltip", "Batch script execution across World Partition maps."))
     .SetIcon(FSlateIcon(FWorldSweepStyle::GetStyleSetName(), "WorldSweep.MenuIcon"))
     .SetMenuType(ETabSpawnerMenuType::Hidden);
+}
+
+void FWorldSweepModule::RegisterWorldSweepLayout(FLayoutExtender& InExtender)
+{
+    // Default position: open alongside the World Partition Editor tab.
+    // This takes effect on fresh installs and when the user resets their layout.
+    // After first arrangement the level editor persists the layout automatically.
+    InExtender.ExtendLayout(
+        FTabId("WorldBrowserPartitionEditor"),
+        ELayoutExtensionPosition::After,
+        FTabManager::FTab(WorldSweepTabName, ETabState::ClosedTab)
+    );
 }
 
 #undef LOCTEXT_NAMESPACE

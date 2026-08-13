@@ -15,16 +15,16 @@ class WORLDSWEEP_API UWorldSweepNamingConventionChecker : public UWorldSweepScri
 {
     GENERATED_BODY()
 
-    //~ Begin UWorldSweepScript Interface
-protected:
-    virtual void OnBatchStarted_Implementation() override;
-    virtual void OnActorFound_Implementation(AActor* InActor, const FBox& InCellBounds) override;
-    virtual void OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool bWasCancelled) override;
-    //~ End UWorldSweepScript Interface
-
 public:
 
     UWorldSweepNamingConventionChecker();
+
+    //~ Begin UWorldSweepScript Interface
+    virtual void OnBatchStarted_Implementation() override;
+    virtual void OnActorFound_Implementation(AActor* InActor, const FBox& InCellBounds) override;
+    virtual void OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool WasCancelled) override;
+    virtual bool HasFailed_Implementation() const override;
+    //~ End UWorldSweepScript Interface
 
     /**
      * Regular expression matched against each actor's display name (label, not internal name).

@@ -11,9 +11,12 @@
  * Intended for CI/CD pipelines and automated scripting workflows.
  *
  * Usage:
- *   UnrealEditor.exe <Project>.uproject <MapPath> -run=WorldSweep -Batch=<BatchAssetPath> [options]
+ *   UnrealEditor.exe <Project>.uproject -run=WorldSweep -Map=<PackagePath> -Batch=<BatchAssetPath> [options]
  *
  * Required:
+ *   -Map=      Package path of the map to load before the sweep runs. The engine ignores a
+ *              positional map argument when -run= is present, so the map must be named here.
+ *              Example: -Map=/Game/Maps/MyOpenWorld
  *   -Batch=    Soft object path to the UWorldSweepBatch data asset.
  *              Example: -Batch=/Game/WorldSweep/Batches/MyBatch
  *
@@ -23,9 +26,10 @@
  *              optional spatial filter in Streaming Levels and Flat Level modes.
  *
  * Exit codes:
- *   0  Batch completed successfully.
+ *   0  Batch completed successfully and no script reported failure.
  *   1  Invalid or missing arguments.
  *   2  Batch execution was cancelled.
+ *   3  Batch completed but one or more scripts returned true from HasFailed().
  */
 UCLASS()
 class WORLDSWEEP_API UWorldSweepCommandlet : public UCommandlet

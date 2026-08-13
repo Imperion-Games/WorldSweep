@@ -1,10 +1,12 @@
 // Copyright © ToaGames. All Rights Reserved.
 
 #include "Scripts/WorldSweepNullMeshAuditor.h"
-#include "WorldSweepLog.h"
-#include "GameFramework/Actor.h"
-#include "Components/StaticMeshComponent.h"
+
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "GameFramework/Actor.h"
+
+#include "WorldSweepLog.h"
 
 UWorldSweepNullMeshAuditor::UWorldSweepNullMeshAuditor()
     : bCheckStaticMeshes(true)
@@ -58,7 +60,7 @@ void UWorldSweepNullMeshAuditor::OnComponentFound_Implementation(UActorComponent
     }
 }
 
-void UWorldSweepNullMeshAuditor::OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool bWasCancelled)
+void UWorldSweepNullMeshAuditor::OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool WasCancelled)
 {
     if (ViolationCount == 0)
     {
@@ -68,4 +70,9 @@ void UWorldSweepNullMeshAuditor::OnBatchCompleted_Implementation(int32 InTotalCe
     {
         UE_LOG(LogWorldSweep, Warning, TEXT("[NullMeshAuditor] Audit complete. %d null mesh reference(s) found."), ViolationCount);
     }
+}
+
+bool UWorldSweepNullMeshAuditor::HasFailed_Implementation() const
+{
+    return ViolationCount > 0;
 }

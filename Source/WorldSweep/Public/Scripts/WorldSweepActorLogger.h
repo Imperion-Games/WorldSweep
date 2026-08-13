@@ -12,17 +12,18 @@ class WORLDSWEEP_API UWorldSweepActorLogger : public UWorldSweepScript
 {
     GENERATED_BODY()
 
-    //~ Begin UWorldSweepScript Interface
-protected:
-    virtual void OnBatchStarted_Implementation() override;
-    virtual void OnCellStarted_Implementation(const FBox& InCellBounds) override;
-    virtual void OnActorFound_Implementation(AActor* InActor, const FBox& InCellBounds) override;
-    virtual void OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool bWasCancelled) override;
-    //~ End UWorldSweepScript Interface
-
 public:
 
     UWorldSweepActorLogger();
+
+protected:
+
+    //~ Begin UWorldSweepScript Interface
+    virtual void OnBatchStarted_Implementation() override;
+    virtual void OnCellStarted_Implementation(const FBox& InCellBounds) override;
+    virtual void OnActorFound_Implementation(AActor* InActor, const FBox& InCellBounds) override;
+    virtual void OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool WasCancelled) override;
+    //~ End UWorldSweepScript Interface
 
 public:
 

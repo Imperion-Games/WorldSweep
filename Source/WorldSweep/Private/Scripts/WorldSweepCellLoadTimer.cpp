@@ -1,8 +1,10 @@
 // Copyright © ToaGames. All Rights Reserved.
 
 #include "Scripts/WorldSweepCellLoadTimer.h"
-#include "WorldSweepLog.h"
+
 #include "HAL/PlatformTime.h"
+
+#include "WorldSweepLog.h"
 
 UWorldSweepCellLoadTimer::UWorldSweepCellLoadTimer()
     : CellLoadStartTime(0.0)
@@ -43,7 +45,7 @@ void UWorldSweepCellLoadTimer::OnCellStarted_Implementation(const FBox& InCellBo
         LoadTime, *InCellBounds.GetCenter().ToString());
 }
 
-void UWorldSweepCellLoadTimer::OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool bWasCancelled)
+void UWorldSweepCellLoadTimer::OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool WasCancelled)
 {
     if (CellsRecorded == 0)
     {

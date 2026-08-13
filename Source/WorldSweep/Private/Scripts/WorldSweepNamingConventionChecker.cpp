@@ -1,9 +1,11 @@
 // Copyright © ToaGames. All Rights Reserved.
 
 #include "Scripts/WorldSweepNamingConventionChecker.h"
-#include "WorldSweepLog.h"
+
 #include "GameFramework/Actor.h"
 #include "Internationalization/Regex.h"
+
+#include "WorldSweepLog.h"
 
 UWorldSweepNamingConventionChecker::UWorldSweepNamingConventionChecker()
     : Pattern(TEXT(".*"))
@@ -29,13 +31,13 @@ void UWorldSweepNamingConventionChecker::OnActorFound_Implementation(AActor* InA
 
     const FString ActorLabel = InActor->GetActorLabel();
     FRegexMatcher Matcher(FRegexPattern(Pattern), ActorLabel);
-    const bool bMatches = Matcher.FindNext();
+    const bool Matches = Matcher.FindNext();
 
     ++CheckedCount;
 
-    if (!bMatches)
+    if (!Matches)
     {
-        UE_LOG(LogWorldSweep, Warning, TEXT("[NamingChecker] Violation — '%s' (%s) does not match pattern '%s'"),
+        UE_LOG(LogWorldSweep, Warning, TEXT("[NamingChecker] Violation: '%s' (%s) does not match pattern '%s'"),
             *ActorLabel,
             *InActor->GetClass()->GetName(),
             *Pattern);
@@ -43,16 +45,21 @@ void UWorldSweepNamingConventionChecker::OnActorFound_Implementation(AActor* InA
     }
     else if (bLogMatchingActors)
     {
-        UE_LOG(LogWorldSweep, Log, TEXT("[NamingChecker] Match — '%s' (%s)"),
+        UE_LOG(LogWorldSweep, Log, TEXT("[NamingChecker] Match: '%s' (%s)"),
             *ActorLabel,
             *InActor->GetClass()->GetName());
     }
 }
 
-void UWorldSweepNamingConventionChecker::OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool bWasCancelled)
+void UWorldSweepNamingConventionChecker::OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool WasCancelled)
 {
     UE_LOG(LogWorldSweep, Log, TEXT("[NamingChecker] Audit complete. Checked: %d | Violations: %d | Pattern: '%s'"),
         CheckedCount,
         ViolationCount,
         *Pattern);
+}
+
+bool UWorldSweepNamingConventionChecker::HasFailed_Implementation() const
+{
+    return ViolationCount > 0;
 }

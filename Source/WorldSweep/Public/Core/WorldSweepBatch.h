@@ -4,8 +4,11 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "Templates/SubclassOf.h"
 #include "Core/WorldSweepScript.h"
 #include "WorldSweepBatch.generated.h"
+
+class AActor;
 
 /** Controls how WorldSweep selects its iteration strategy for a given world. */
 UENUM(BlueprintType)

@@ -30,19 +30,35 @@ WorldSweep divides a sweep area into a grid of cells. For each cell it loads act
 
 Key features:
 
-- **Three sweep modes** — World Partition, Streaming Levels, Flat Level (auto-detected by default)
-- **Priority-based multi-pass execution** — scripts with different priorities run in separate passes over the world
-- **Tag and class filtering** — narrow which actors reach your scripts
-- **Auto-save & source control checkout** — dirtied packages saved and checked out per cell
-- **Headless commandlet** — run sweeps from CI without opening the editor UI
+- **Three sweep modes**: World Partition, Streaming Levels, Flat Level (auto-detected by default)
+- **Priority-based multi-pass execution**: scripts with different priorities run in separate passes over the world
+- **Tag and class filtering**: narrow which actors reach your scripts
+- **Auto-save & source control checkout**: dirtied packages saved and checked out per cell
+- **Headless commandlet**: run sweeps from CI without opening the editor UI
 
 ---
 
 ## Installation
 
+**Supported engine versions: UE 5.4 through 5.8.** Download the release zip matching
+your engine. `main` tracks 5.8; older versions live on the `ue-5.7`, `ue-5.6`,
+`ue-5.5`, and `ue-5.4` branches.
+
 1. Copy the `WorldSweep` folder into your project's `Plugins/` directory.
 2. Re-generate project files and build.
 3. Enable the plugin in **Edit → Plugins → Editor → WorldSweep**.
+
+### Editor-only, and what that means for cooking
+
+WorldSweep ships a single **Editor**-type module. It is excluded from packaged
+builds entirely, adds no runtime cost, and links nothing a shipping target needs.
+
+One consequence is worth planning for: because `UWorldSweepScript` lives in an
+editor-only module, a Blueprint subclass of it is a `/Game` asset whose parent
+class does not exist in a cooked build. Keep your batch and script assets in a
+directory excluded from cooking (for example `/Game/Editor/WorldSweep/`, added to
+**Project Settings → Packaging → Directories to never cook**). Nothing that ships
+should reference them.
 
 ---
 
@@ -64,7 +80,7 @@ Create a batch via **Content Browser → right-click → Data Asset → WorldSwe
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `Scripts` | `TArray<UWorldSweepScript*>` | — | Inline script instances to execute. |
+| `Scripts` | `TArray<UWorldSweepScript*>` | n/a | Inline script instances to execute. |
 | `CellSize` | `float` | `25600` | Grid cell size in cm. Should match your World Partition cell size. |
 | `ActorClassFilter` | `TSubclassOf<AActor>` | `nullptr` | Optional global class filter. `nullptr` = all actors. |
 | `SweepMode` | `EWorldSweepMode` | `Auto` | `Auto` / `WorldPartition` / `StreamingLevels` / `FlatLevel`. |
@@ -85,7 +101,7 @@ Set `EventFlags` on your script to subscribe to the events you need. Combine fla
 | `Actors` | `0x02` | `OnActorFound` |
 | `Components` | `0x04` | `OnComponentFound` |
 
-The runner aggregates flags across all scripts in a pass. If no script requests `Actors`, World Partition cells are not streamed in — they are skipped entirely.
+The runner aggregates flags across all scripts in a pass. If no script requests `Actors`, World Partition cells are not streamed in; they are skipped entirely.
 
 ### C++ Script
 
@@ -118,7 +134,7 @@ public:
 
 UMyAuditScript::UMyAuditScript()
 {
-    // Subscribe to actor events only — cells will be loaded
+    // Subscribe to actor events only; cells will be loaded
     EventFlags = static_cast<int32>(EWorldSweepEventFlags::Actors);
     Priority = 0;
 }
@@ -256,14 +272,16 @@ No configurable properties. Useful for profiling World Partition cell load times
 ### Commandlet (CI/CD)
 
 ```bash
-UnrealEditor.exe MyProject.uproject /Game/Maps/MyLevel \
+UnrealEditor.exe MyProject.uproject \
   -run=WorldSweep \
+  -Map=/Game/Maps/MyLevel \
   -Batch=/Game/WorldSweep/MyBatch \
   -SweepMinX=0 -SweepMinY=0 -SweepMaxX=800000 -SweepMaxY=800000
 ```
 
 | Argument | Required | Description |
 |---|---|---|
+| `-Map=<path>` | Yes | Soft object path to the map to open before running the sweep. |
 | `-Batch=<path>` | Yes | Soft object path to the `UWorldSweepBatch` asset. |
 | `-SweepMinX/Y`, `-SweepMaxX/Y` | No | Sweep area bounds. If omitted, derived from World Partition bounds or actor locations. |
 

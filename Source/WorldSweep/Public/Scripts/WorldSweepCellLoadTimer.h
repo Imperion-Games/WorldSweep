@@ -12,17 +12,16 @@ class WORLDSWEEP_API UWorldSweepCellLoadTimer : public UWorldSweepScript
 {
     GENERATED_BODY()
 
-    //~ Begin UWorldSweepScript Interface
-public:
-    virtual void OnBatchStarted_Implementation() override;
-    virtual void OnPreCellLoad_Implementation(const FBox& InCellBounds) override;
-    virtual void OnCellStarted_Implementation(const FBox& InCellBounds) override;
-    virtual void OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool bWasCancelled) override;
-    //~ End UWorldSweepScript Interface
-
 public:
 
     UWorldSweepCellLoadTimer();
+
+    //~ Begin UWorldSweepScript Interface
+    virtual void OnBatchStarted_Implementation() override;
+    virtual void OnPreCellLoad_Implementation(const FBox& InCellBounds) override;
+    virtual void OnCellStarted_Implementation(const FBox& InCellBounds) override;
+    virtual void OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool WasCancelled) override;
+    //~ End UWorldSweepScript Interface
 
 private:
 

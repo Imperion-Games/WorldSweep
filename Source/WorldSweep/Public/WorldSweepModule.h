@@ -6,8 +6,9 @@
 #include "Modules/ModuleManager.h"
 
 class FLayoutExtender;
+class FTabManager;
 
-/** Editor module for WorldSweep — registers the docked tab with the level editor, Tools menu entry, and message log listing. */
+/** Editor module for WorldSweep. Registers the docked tab with the level editor, Tools menu entry, and message log listing. */
 class WORLDSWEEP_API FWorldSweepModule : public IModuleInterface
 {
     //~ Begin IModuleInterface Interface
@@ -16,6 +17,7 @@ public:
     virtual void ShutdownModule() override;
     //~ End IModuleInterface Interface
 
+    /** Registered tab name for the WorldSweep dockable editor tab. */
     static const FName WorldSweepTabName;
 
 private:

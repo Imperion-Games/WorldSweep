@@ -17,16 +17,15 @@ class WORLDSWEEP_API UWorldSweepCollisionProfileSetter : public UWorldSweepScrip
 {
     GENERATED_BODY()
 
-    //~ Begin UWorldSweepScript Interface
-protected:
-    virtual void OnBatchStarted_Implementation() override;
-    virtual void OnComponentFound_Implementation(UActorComponent* InComponent, AActor* InActor, const FBox& InCellBounds) override;
-    virtual void OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool bWasCancelled) override;
-    //~ End UWorldSweepScript Interface
-
 public:
 
     UWorldSweepCollisionProfileSetter();
+
+    //~ Begin UWorldSweepScript Interface
+    virtual void OnBatchStarted_Implementation() override;
+    virtual void OnComponentFound_Implementation(UActorComponent* InComponent, AActor* InActor, const FBox& InCellBounds) override;
+    virtual void OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool WasCancelled) override;
+    //~ End UWorldSweepScript Interface
 
     /** Collision profile name to check or apply to all primitive components on each actor. */
     UPROPERTY(EditAnywhere, Category = "WorldSweep|CollisionProfileSetter")

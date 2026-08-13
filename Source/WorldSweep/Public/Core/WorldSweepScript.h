@@ -65,14 +65,28 @@ public:
     void OnComponentFound(UActorComponent* InComponent, AActor* InActor, const FBox& InCellBounds);
     virtual void OnComponentFound_Implementation(UActorComponent* InComponent, AActor* InActor, const FBox& InCellBounds) {}
 
-    /** Called once after the entire batch finishes or is cancelled. bWasCancelled is true when the user pressed Cancel before all cells were processed. */
+    /** Called once after the entire batch finishes or is cancelled. WasCancelled is true when the user pressed Cancel before all cells were processed. */
     UFUNCTION(BlueprintNativeEvent, Category = "WorldSweep|Script")
-    void OnBatchCompleted(int32 InTotalCellsProcessed, bool bWasCancelled);
-    virtual void OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool bWasCancelled) {}
+    void OnBatchCompleted(int32 InTotalCellsProcessed, bool WasCancelled);
+    virtual void OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool WasCancelled) {}
+
+    /** Returns true if this script considers the batch to have failed. Called by the runner after OnBatchCompleted. Override in C++ or Blueprint to define script-specific failure conditions. Returning true causes the commandlet to exit with code 3. */
+    UFUNCTION(BlueprintNativeEvent, Category = "WorldSweep|Script")
+    bool HasFailed() const;
+    virtual bool HasFailed_Implementation() const { return false; }
+
+    /** True when this script opted into the cell lifecycle events. */
+    bool NeedsCellEvents() const { return (EventFlags & static_cast<int32>(EWorldSweepEventFlags::CellEvents)) != 0; }
+
+    /** True when this script opted into per-actor events. */
+    bool NeedsActors() const { return (EventFlags & static_cast<int32>(EWorldSweepEventFlags::Actors)) != 0; }
+
+    /** True when this script opted into per-component events. */
+    bool NeedsComponents() const { return (EventFlags & static_cast<int32>(EWorldSweepEventFlags::Components)) != 0; }
 
 public:
 
-    /** Bitmask of EWorldSweepEventFlags. Controls which events this script receives. The runner ORs all script flags in a pass to determine what work to do — actor loading, cell events, component iteration. */
+    /** Bitmask of EWorldSweepEventFlags. Controls which events this script receives. The runner ORs all script flags in a pass to determine what work to do (actor loading, cell events, component iteration). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "WorldSweep|Script", meta = (Bitmask, BitmaskEnum = "/Script/WorldSweep.EWorldSweepEventFlags"))
     int32 EventFlags;
 
@@ -87,8 +101,4 @@ public:
     /** The world being swept. Set by the runner before OnBatchStarted and cleared after OnBatchCompleted. Use this to spawn or query actors during the batch. */
     UPROPERTY(Transient, BlueprintReadOnly, Category = "WorldSweep|Script")
     TObjectPtr<UWorld> World;
-
-    bool NeedsCellEvents() const { return (EventFlags & static_cast<int32>(EWorldSweepEventFlags::CellEvents)) != 0; }
-    bool NeedsActors()     const { return (EventFlags & static_cast<int32>(EWorldSweepEventFlags::Actors))     != 0; }
-    bool NeedsComponents() const { return (EventFlags & static_cast<int32>(EWorldSweepEventFlags::Components)) != 0; }
 };

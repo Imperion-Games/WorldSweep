@@ -1,10 +1,42 @@
 // Copyright © ToaGames. All Rights Reserved.
 
 #include "Scripts/WorldSweepNaniteAuditor.h"
-#include "WorldSweepLog.h"
-#include "GameFramework/Actor.h"
+
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "GameFramework/Actor.h"
+#include "Misc/EngineVersionComparison.h"
+
+#include "WorldSweepLog.h"
+
+namespace
+{
+    /**
+     * Read a static mesh's Nanite settings.
+     *
+     * UE 5.7 added GetNaniteSettings/SetNaniteSettings and deprecated direct access to the
+     * UStaticMesh::NaniteSettings member. UE 5.4 to 5.6 have only the member. Reading the
+     * member on 5.7+ compiles but emits a deprecation warning, so each range uses its own path.
+     */
+    FMeshNaniteSettings GetMeshNaniteSettings(const UStaticMesh& InMesh)
+    {
+#if UE_VERSION_OLDER_THAN(5, 7, 0)
+        return InMesh.NaniteSettings;
+#else
+        return InMesh.GetNaniteSettings();
+#endif
+    }
+
+    /** Write a static mesh's Nanite settings. See GetMeshNaniteSettings for the version split. */
+    void SetMeshNaniteSettings(UStaticMesh& InOutMesh, const FMeshNaniteSettings& InSettings)
+    {
+#if UE_VERSION_OLDER_THAN(5, 7, 0)
+        InOutMesh.NaniteSettings = InSettings;
+#else
+        InOutMesh.SetNaniteSettings(InSettings);
+#endif
+    }
+}
 
 UWorldSweepNaniteAuditor::UWorldSweepNaniteAuditor()
     : bEnableNanite(true)
@@ -31,7 +63,7 @@ void UWorldSweepNaniteAuditor::OnComponentFound_Implementation(UActorComponent* 
         return;
     }
 
-    // Deduplicate by asset path — the same mesh may be referenced by many actors.
+    // Deduplicate by asset path. The same mesh may be referenced by many actors.
     const FName MeshPath(*Mesh->GetPathName());
     if (ProcessedMeshPaths.Contains(MeshPath))
     {
@@ -39,20 +71,21 @@ void UWorldSweepNaniteAuditor::OnComponentFound_Implementation(UActorComponent* 
     }
     ProcessedMeshPaths.Add(MeshPath);
 
-    const bool bCurrentlyEnabled = Mesh->GetNaniteSettings().bEnabled;
-    if (bCurrentlyEnabled == bEnableNanite)
+    FMeshNaniteSettings Settings = GetMeshNaniteSettings(*Mesh);
+    if (Settings.bEnabled == bEnableNanite)
     {
         return;
     }
+
+    const bool bCurrentlyEnabled = Settings.bEnabled;
 
     ++ViolationCount;
 
     if (bApplyChanges)
     {
         Mesh->Modify();
-        FMeshNaniteSettings NewSettings = Mesh->GetNaniteSettings();
-        NewSettings.bEnabled = bEnableNanite;
-        Mesh->SetNaniteSettings(NewSettings);
+        Settings.bEnabled = bEnableNanite;
+        SetMeshNaniteSettings(*Mesh, Settings);
         ++ChangedCount;
 
         UE_LOG(LogWorldSweep, Log, TEXT("[NaniteAuditor] Nanite %s → '%s' (referenced by '%s')"),
@@ -62,7 +95,7 @@ void UWorldSweepNaniteAuditor::OnComponentFound_Implementation(UActorComponent* 
     }
     else
     {
-        UE_LOG(LogWorldSweep, Warning, TEXT("[NaniteAuditor] Nanite is %s but expected %s — '%s' (referenced by '%s')"),
+        UE_LOG(LogWorldSweep, Warning, TEXT("[NaniteAuditor] Nanite is %s but expected %s: '%s' (referenced by '%s')"),
             bCurrentlyEnabled ? TEXT("Enabled") : TEXT("Disabled"),
             bEnableNanite     ? TEXT("Enabled") : TEXT("Disabled"),
             *Mesh->GetName(),
@@ -70,7 +103,7 @@ void UWorldSweepNaniteAuditor::OnComponentFound_Implementation(UActorComponent* 
     }
 }
 
-void UWorldSweepNaniteAuditor::OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool bWasCancelled)
+void UWorldSweepNaniteAuditor::OnBatchCompleted_Implementation(int32 InTotalCellsProcessed, bool WasCancelled)
 {
     if (bApplyChanges)
     {
@@ -94,4 +127,10 @@ void UWorldSweepNaniteAuditor::OnBatchCompleted_Implementation(int32 InTotalCell
                 bEnableNanite ? TEXT("Enabled") : TEXT("Disabled"));
         }
     }
+}
+
+bool UWorldSweepNaniteAuditor::HasFailed_Implementation() const
+{
+    // In apply mode, violations have been fixed. The batch is not a failure.
+    return !bApplyChanges && ViolationCount > 0;
 }

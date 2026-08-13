@@ -1,0 +1,90 @@
+---
+# Unreal Engine 5: shared .clang-format for Modular Plugins
+# Mirrors the UE coding standard enforced by pre_commit_check.py.
+# Place (or symlink) this file at each plugin repo root so that
+# VS Code / Rider / clangd auto-format on save matches what the hook checks.
+#
+# Installed automatically by tools/setup_hooks.py.
+
+Language: Cpp
+BasedOnStyle: LLVM
+
+# ── Indentation ────────────────────────────────────────────────────────────
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ContinuationIndentWidth: 4
+ConstructorInitializerIndentWidth: 4
+AccessModifierOffset: -4
+NamespaceIndentation: None
+IndentCaseLabels: false
+
+# ── Braces (Allman style, UE standard) ───────────────────────────────────
+BreakBeforeBraces: Allman
+BraceWrapping:
+  AfterClass: true
+  AfterControlStatement: true
+  AfterEnum: true
+  AfterFunction: true
+  AfterNamespace: true
+  AfterStruct: true
+  AfterUnion: true
+  BeforeCatch: true
+  BeforeElse: true
+  IndentBraces: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+
+# ── Single-line policy ─────────────────────────────────────────────────────
+AllowShortBlocksOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+
+# ── Line length ────────────────────────────────────────────────────────────
+# UE does not enforce a column limit via formatter.
+ColumnLimit: 0
+
+# ── Alignment ──────────────────────────────────────────────────────────────
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignOperands: true
+AlignTrailingComments: false
+AlignConsecutiveDeclarations: false
+
+# ── Breaking ───────────────────────────────────────────────────────────────
+AllowAllParametersOfDeclarationOnNextLine: false
+AlwaysBreakTemplateDeclarations: Yes
+BreakBeforeTernaryOperators: true
+BreakConstructorInitializersBeforeComma: true
+BreakBeforeBinaryOperators: None
+
+# ── Pointers & references ──────────────────────────────────────────────────
+# UE style: Type* Ptr  (pointer attached to type, not name)
+PointerAlignment: Left
+DerivePointerAlignment: false
+
+# ── Includes ──────────────────────────────────────────────────────────────
+SortIncludes: true
+IncludeBlocks: Regroup
+IncludeCategories:
+  # Generated UHT header first
+  - Regex: '.*\.generated\.h'
+    Priority: 1
+  # Engine / plugin headers
+  - Regex: '<.*>'
+    Priority: 2
+  # Local project headers
+  - Regex: '".*"'
+    Priority: 3
+
+# ── Misc ───────────────────────────────────────────────────────────────────
+Cpp11BracedListStyle: false
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+SpacesInAngles: false
+MaxEmptyLinesToKeep: 2
+KeepEmptyLinesAtTheStartOfBlocks: false
