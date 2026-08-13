@@ -2,7 +2,7 @@
 	"FileVersion": 3,
 	"Version": 1,
 	"VersionName": "1.0.0",
-	"EngineVersion": "5.8.0",
+	"EngineVersion": "5.7.0",
 	"FriendlyName": "WorldSweep",
 	"Description": "Batch scripting system for executing actions across large World Partition maps, cell by cell.",
 	"Category": "Editor",
