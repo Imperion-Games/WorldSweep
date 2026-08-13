@@ -266,15 +266,12 @@ namespace WorldSweepHelpers
     {
         // Actor events fire before component events so a script always sees an actor
         // before that actor's components.
-        if (!InPass.bNeedsComponents)
+        const bool bReachedAnyScript = DispatchActorEvents(InActor, InCellBounds, InPassScripts);
+
+        if (InPass.bNeedsComponents)
         {
-            return DispatchActorEvents(InActor, InCellBounds, InPassScripts);
+            DispatchComponentEvents(InActor, InCellBounds, InPassScripts);
         }
-
-        bool bReachedAnyScript = false;
-        bReachedAnyScript = DispatchActorEvents(InActor, InCellBounds, InPassScripts);
-
-        DispatchComponentEvents(InActor, InCellBounds, InPassScripts);
 
         return bReachedAnyScript;
     }
