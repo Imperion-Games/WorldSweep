@@ -11,16 +11,8 @@
 
 #include "Core/WorldSweepBatch.h"
 #include "Execution/WorldSweepRunner.h"
+#include "WorldSweepInternal.h"
 #include "WorldSweepLog.h"
-
-namespace
-{
-    /** Half the legal world height, in cm. Sweep areas span this range so actors at extreme altitudes are never clipped. */
-    constexpr double HalfWorldMax = 1048576.0;
-
-    /** Padding applied around bounds derived from raw actor locations, in cm. */
-    constexpr double ActorBoundsPadding = 500.0;
-}
 
 UWorldSweepCommandlet::UWorldSweepCommandlet()
 {
@@ -107,25 +99,6 @@ static UWorldSweepBatch* ResolveBatch(const FString& InParams)
     return Batch;
 }
 
-/** Accumulate the locations of every actor in InWorld except AWorldSettings. */
-static FBox AccumulateActorBounds(UWorld* InWorld, int32& OutActorCount)
-{
-    FBox Bounds(EForceInit::ForceInit);
-    OutActorCount = 0;
-
-    for (TActorIterator<AActor> It(InWorld); It; ++It)
-    {
-        AActor* Actor = *It;
-        if (Actor && !Actor->IsA<AWorldSettings>())
-        {
-            Bounds += Actor->GetActorLocation();
-            ++OutActorCount;
-        }
-    }
-
-    return Bounds;
-}
-
 /** Parse the four explicit sweep-area arguments. Returns false on a partial or malformed set; OutHandled is false when none were supplied. */
 static bool ParseExplicitSweepArea(const FString& InParams, FBox& OutSweepArea, bool& OutHandled)
 {
@@ -177,7 +150,7 @@ static bool ParseExplicitSweepArea(const FString& InParams, FBox& OutSweepArea, 
     }
 
     // Extend Z to cover the full legal world height so no actors are missed.
-    OutSweepArea = FBox(FVector(MinX, MinY, -HalfWorldMax), FVector(MaxX, MaxY, HalfWorldMax));
+    OutSweepArea = FBox(FVector(MinX, MinY, -WorldSweepInternal::HalfWorldMax), FVector(MaxX, MaxY, WorldSweepInternal::HalfWorldMax));
 
     UE_LOG(LogWorldSweep, Verbose, TEXT("WorldSweepCommandlet: Sweep area set to (%.0f, %.0f) to (%.0f, %.0f)."),
         MinX, MinY, MaxX, MaxY);
@@ -200,7 +173,7 @@ static bool ResolveSweepArea(const FString& InParams, UWorld* InWorld, FBox& Out
 
     // No sweep area specified. Derive full world bounds automatically.
     int32 ActorCount = 0;
-    const FBox ActorBounds = AccumulateActorBounds(InWorld, ActorCount);
+    const FBox ActorBounds = WorldSweepInternal::AccumulateActorBounds(InWorld, &ActorCount);
 
     if (const UWorldPartition* Partition = InWorld->GetWorldPartition())
     {
@@ -210,8 +183,8 @@ static bool ResolveSweepArea(const FString& InParams, UWorld* InWorld, FBox& Out
 
         // Pin Z to the full legal world height so sky/atmosphere actors at extreme altitudes are
         // never missed by the cell bounds check.
-        OutSweepArea.Min.Z = -HalfWorldMax;
-        OutSweepArea.Max.Z =  HalfWorldMax;
+        OutSweepArea.Min.Z = -WorldSweepInternal::HalfWorldMax;
+        OutSweepArea.Max.Z =  WorldSweepInternal::HalfWorldMax;
 
         UE_LOG(LogWorldSweep, Verbose, TEXT("WorldSweepCommandlet: No sweep area specified. Derived from World Partition bounds plus %d loaded actor(s)."), ActorCount);
         return true;
@@ -219,7 +192,7 @@ static bool ResolveSweepArea(const FString& InParams, UWorld* InWorld, FBox& Out
 
     if (ActorBounds.IsValid)
     {
-        OutSweepArea = ActorBounds.ExpandBy(ActorBoundsPadding);
+        OutSweepArea = ActorBounds.ExpandBy(WorldSweepInternal::ActorBoundsPadding);
         UE_LOG(LogWorldSweep, Verbose, TEXT("WorldSweepCommandlet: No sweep area specified. Derived bounds from %d actor(s)."), ActorCount);
     }
     else

@@ -8,6 +8,8 @@
 #include "Styling/CoreStyle.h"
 #include "WorldPartition/WorldPartition.h"
 
+#include "WorldSweepInternal.h"
+
 namespace
 {
     /** Maximum number of cell lines to draw before skipping the grid entirely (avoids overdraw on huge worlds at low zoom). */
@@ -15,9 +17,6 @@ namespace
 
     /** Half-extent of the fallback world square used when the world exposes no bounds, in cm. */
     constexpr double FallbackWorldHalfExtent = 512000.0;
-
-    /** Half the legal world height, in cm. Sweep areas span this range so actors at extreme altitudes are never clipped. */
-    constexpr double HalfWorldMax = 1048576.0;
 
     /** Minimum drag extent, in world units, below which a selection is treated as an accidental click. */
     constexpr double MinDragExtent = 100.0;
@@ -133,8 +132,8 @@ FReply SWorldSweepMapView::OnMouseButtonUp(const FGeometry& InGeometry, const FP
         {
             // Use the full legal world height so no actors at extreme Z are missed.
             const FBox NewArea(
-                FVector(SelectMin.X, SelectMin.Y, -HalfWorldMax),
-                FVector(SelectMax.X, SelectMax.Y,  HalfWorldMax)
+                FVector(SelectMin.X, SelectMin.Y, -WorldSweepInternal::HalfWorldMax),
+                FVector(SelectMax.X, SelectMax.Y,  WorldSweepInternal::HalfWorldMax)
             );
             OnSweepAreaChanged.ExecuteIfBound(NewArea);
         }
