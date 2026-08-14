@@ -1,21 +1,33 @@
-MIT License
+Copyright (c) 2026 ToaGames. All Rights Reserved.
 
-Copyright (c) 2026 ToaGames
+This software is commercial software, licensed and not sold.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+LICENSED DISTRIBUTION
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Copies obtained through Fab (https://www.fab.com) are governed by the Fab
+End User License Agreement in force at the time of purchase, which is the
+controlling licence for those copies. Nothing in this file grants rights
+beyond that agreement.
+
+PERMITTED USE
+
+Subject to that agreement, a licensee may use, modify, and compile this
+software as part of their own projects, and distribute it in compiled or
+packaged form as an integral part of a product they develop.
+
+NOT PERMITTED
+
+Except where the controlling licence expressly allows it, this software may
+not be redistributed, resold, sublicensed, published, or otherwise made
+available as source code or as a standalone plugin, whether modified or
+unmodified, and whether for a fee or free of charge.
+
+NO WARRANTY
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
