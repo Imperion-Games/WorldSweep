@@ -22,35 +22,15 @@
 #include "Core/WorldSweepBatch.h"
 #include "Execution/WorldSweepRunner.h"
 #include "UI/SWorldSweepMapView.h"
+#include "WorldSweepInternal.h"
 #include "WorldSweepLog.h"
 
 #define LOCTEXT_NAMESPACE "SWorldSweepWindow"
 
 namespace
 {
-    /** Half the legal world height, in cm. Sweep areas span this range so actors at extreme altitudes are never clipped. */
-    constexpr double HalfWorldMax = 1048576.0;
-
-    /** Padding applied around bounds derived from raw actor locations, in cm. */
-    constexpr double ActorBoundsPadding = 500.0;
-
     /** Cell size shown in the map view when no batch is selected, in cm. Matches the World Partition default. */
     constexpr float DefaultCellSize = 25600.0f;
-
-    /** Accumulate the locations of every actor in InWorld except AWorldSettings. */
-    FBox AccumulateActorBounds(UWorld* InWorld)
-    {
-        FBox Bounds(EForceInit::ForceInit);
-        for (TActorIterator<AActor> It(InWorld); It; ++It)
-        {
-            AActor* Actor = *It;
-            if (Actor && !Actor->IsA<AWorldSettings>())
-            {
-                Bounds += Actor->GetActorLocation();
-            }
-        }
-        return Bounds;
-    }
 }
 
 void SWorldSweepWindow::Construct(const FArguments& InArgs)
@@ -349,20 +329,20 @@ FReply SWorldSweepWindow::OnUseEntireWorldClicked()
         // those outside the runtime streaming range; GetRuntimeWorldBounds can be smaller and
         // would silently drop edge cells.
         SweepArea = Partition->GetEditorWorldBounds();
-        SweepArea += AccumulateActorBounds(World);
+        SweepArea += WorldSweepInternal::AccumulateActorBounds(World);
 
         // Pin Z to the full legal world height so sky and atmosphere actors at extreme altitudes
         // are never clipped by the cell bounds check.
-        SweepArea.Min.Z = -HalfWorldMax;
-        SweepArea.Max.Z =  HalfWorldMax;
+        SweepArea.Min.Z = -WorldSweepInternal::HalfWorldMax;
+        SweepArea.Max.Z =  WorldSweepInternal::HalfWorldMax;
 
         return FReply::Handled();
     }
 
-    const FBox ActorBounds = AccumulateActorBounds(World);
+    const FBox ActorBounds = WorldSweepInternal::AccumulateActorBounds(World);
     if (ActorBounds.IsValid)
     {
-        SweepArea = ActorBounds.ExpandBy(ActorBoundsPadding);
+        SweepArea = ActorBounds.ExpandBy(WorldSweepInternal::ActorBoundsPadding);
     }
 
     return FReply::Handled();
